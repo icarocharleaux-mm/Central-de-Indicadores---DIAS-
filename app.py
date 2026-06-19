@@ -37,13 +37,18 @@ html, body, [class*="css"], .stApp, p, div, label {
 }
 .block-container { padding: 1rem 2rem 2rem !important; max-width: 1400px !important; }
 
-/* Oculta botão de colapso da sidebar e ícone que vira texto */
-[data-testid="stSidebarCollapsedControl"],
-[data-testid="collapsedControl"],
-[data-testid="stSidebarCollapseButton"] { display: none !important; }
-/* Previne que ícones Material não carregados apareçam como texto */
-.material-symbols-rounded, .material-icons { font-size: 0 !important; }
-button[kind="header"] > div > span { display: none !important; }
+/* Botão de colapso da sidebar — mantém funcional, corrige ícone Material */
+[data-testid="stSidebarCollapsedControl"] span,
+[data-testid="stSidebarCollapseButton"]  span { font-size: 0 !important; }
+[data-testid="stSidebarCollapsedControl"] button::before { content:"›"; font-size:22px; color:#2DC5B4; }
+[data-testid="stSidebarCollapseButton"]  button::before { content:"‹"; font-size:22px; color:#2DC5B4; }
+[data-testid="stSidebarCollapsedControl"] button,
+[data-testid="stSidebarCollapseButton"]  button {
+    background: rgba(45,197,180,.12) !important;
+    border: 1px solid rgba(45,197,180,.35) !important;
+    border-radius: 8px !important;
+    width: 36px !important; height: 36px !important;
+}
 
 /* KPI cards */
 [data-testid="metric-container"] {
@@ -322,19 +327,29 @@ k5.metric("Média de Atraso",   f"{media_dias:.0f} dias")
 
 
 # ── Helper de gráficos ────────────────────────────────────────────────────────
+FONT = dict(family="Barlow Condensed, Arial Narrow, sans-serif", color="#FFFFFF")
+
 def fmt(fig, h=420, legend_h=False):
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#FFFFFF", family="Barlow Condensed", size=15),
-        margin=dict(l=10, r=10, t=48, b=10),
+        font={**FONT, "size": 15},
+        margin=dict(l=12, r=140, t=52, b=12),   # r=140 dá espaço ao colorbar
         height=h,
-        title_font=dict(size=18, color="#FFFFFF", family="Barlow Condensed"),
+        title_font={**FONT, "size": 19},
         legend=dict(
             bgcolor="rgba(0,0,0,0)",
-            font=dict(size=14),
+            font=dict(size=15),
             orientation="h" if legend_h else "v",
             y=1.12 if legend_h else 1,
+        ),
+        coloraxis_colorbar=dict(
+            thickness=14,
+            len=0.7,
+            tickfont=dict(size=13, color="#FFFFFF"),
+            title=dict(font=dict(size=13, color="#FFFFFF")),
+            bgcolor="rgba(0,0,0,0)",
+            outlinewidth=0,
         ),
     )
     fig.update_xaxes(
@@ -346,9 +361,11 @@ def fmt(fig, h=420, legend_h=False):
     fig.update_yaxes(
         gridcolor="rgba(255,255,255,.12)",
         zerolinecolor="rgba(255,255,255,.2)",
-        tickfont=dict(size=14),
+        tickfont=dict(size=15),
         title_font=dict(size=15),
+        automargin=True,
     )
+    fig.update_layout(uniformtext_minsize=13, uniformtext_mode="hide")
     return fig
 
 
@@ -379,8 +396,8 @@ with tab1:
                      color_continuous_scale=[[0, DEEP], [1, TEAL]],
                      text="label")
         fig.update_traces(marker_line_width=0, textposition="outside",
-                          textfont=dict(size=14))
-        fig.update_layout(coloraxis_showscale=False,
+                          textfont=dict(size=15))
+        fig.update_layout(coloraxis_showscale=True,
                           yaxis=dict(categoryorder="total ascending"),
                           xaxis_title="Quantidade de NFs")
         st.plotly_chart(fmt(fig, 480), use_container_width=True)
@@ -433,8 +450,8 @@ with tab1:
                      color_continuous_scale=[[0, DEEP], [1, TEAL]],
                      text="label")
         fig.update_traces(marker_line_width=0, textposition="outside",
-                          textfont=dict(size=13))
-        fig.update_layout(coloraxis_showscale=False, xaxis_title="")
+                          textfont=dict(size=15))
+        fig.update_layout(coloraxis_showscale=True, xaxis_title="")
         st.plotly_chart(fmt(fig, 360), use_container_width=True)
 
 
@@ -459,7 +476,7 @@ with tab2:
             y=d["Filial"], x=d["Total"], orientation="h",
             name="Total NFs", marker_color=TEAL, marker_line_width=0,
             text=d["Total"].apply(lambda x: f"{x:,.0f}"),
-            textposition="outside", textfont=dict(size=14),
+            textposition="outside", textfont=dict(size=15),
         ))
         fig.add_trace(go.Bar(
             y=d["Filial"], x=d["Atraso"], orientation="h",
@@ -478,8 +495,8 @@ with tab2:
                      text="% Atraso",
                      hover_data={"Total":True,"Atraso":True,"Valor":":.0f"})
         fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside",
-                          marker_line_width=0, textfont=dict(size=14))
-        fig.update_layout(coloraxis_showscale=False, xaxis_title="")
+                          marker_line_width=0, textfont=dict(size=15))
+        fig.update_layout(coloraxis_showscale=True, xaxis_title="")
         st.plotly_chart(fmt(fig, 380), use_container_width=True)
 
     st.markdown('<div class="sec">Valor em Aberto por Filial</div>', unsafe_allow_html=True)
@@ -489,7 +506,7 @@ with tab2:
                      color_discrete_sequence=[DEEP],
                      text=d3["Valor"].apply(lambda x: f"R$ {x/1e3:.0f}k" if x >= 1000 else f"R$ {x:.0f}").tolist())
         fig.update_traces(marker_line_width=0, textposition="outside",
-                          textfont=dict(size=14))
+                          textfont=dict(size=15))
         fig.update_layout(xaxis_title="Valor NF (R$)")
         st.plotly_chart(fmt(fig, max(420, len(d3)*32)), use_container_width=True)
 
@@ -516,7 +533,7 @@ with tab3:
             y=d["Cliente"], x=d["Total"], orientation="h",
             name="Total NFs", marker_color=TEAL, marker_line_width=0,
             text=d["Total"].apply(lambda x: f"{x:,.0f}"),
-            textposition="outside", textfont=dict(size=13),
+            textposition="outside", textfont=dict(size=15),
         ))
         fig.add_trace(go.Bar(
             y=d["Cliente"], x=d["Atraso"], orientation="h",
@@ -538,8 +555,8 @@ with tab3:
                      color_continuous_scale=[[0, DEEP],[1, TEAL]],
                      text=d2["Valor"].apply(lambda x: f"R$ {x/1e3:.0f}k" if x >= 1000 else f"R$ {x:.0f}").tolist())
         fig.update_traces(marker_line_width=0, textposition="outside",
-                          textfont=dict(size=13))
-        fig.update_layout(coloraxis_showscale=False, xaxis_title="Valor NF (R$)")
+                          textfont=dict(size=15))
+        fig.update_layout(coloraxis_showscale=True, xaxis_title="Valor NF (R$)")
         st.plotly_chart(fmt(fig, max(480, n_cli * 26)), use_container_width=True)
 
 
@@ -575,7 +592,7 @@ with tab4:
                          text="Qtd", title="NFs em Atraso por Faixa de Dias")
             fig.update_traces(marker_line_width=0, textposition="outside",
                               textfont=dict(size=15))
-            fig.update_layout(coloraxis_showscale=False, xaxis_title="")
+            fig.update_layout(coloraxis_showscale=True, xaxis_title="")
             st.plotly_chart(fmt(fig, 360), use_container_width=True)
 
         with cb:
@@ -588,7 +605,7 @@ with tab4:
                          text=d2["Valor"].apply(lambda x: f"R$ {x/1e3:.0f}k" if pd.notna(x) and x >= 1000 else "").tolist(),
                          title="Valor em Risco por Faixa (R$)")
             fig.update_traces(marker_line_width=0, textposition="outside",
-                              textfont=dict(size=14))
+                              textfont=dict(size=15))
             fig.update_layout(xaxis_title="")
             st.plotly_chart(fmt(fig, 360), use_container_width=True)
 
@@ -600,7 +617,7 @@ with tab4:
                      color_discrete_sequence=[SALMON],
                      text="Qtd")
         fig.update_traces(marker_line_width=0, textposition="outside",
-                          textfont=dict(size=14))
+                          textfont=dict(size=15))
         fig.update_layout(yaxis=dict(categoryorder="total ascending"), xaxis_title="")
         st.plotly_chart(fmt(fig, 480), use_container_width=True)
 
