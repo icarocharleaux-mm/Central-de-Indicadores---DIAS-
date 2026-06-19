@@ -1,0 +1,18 @@
+# Dados operacionais (nunca commitar)
+outputs/
+data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.log
+
+# Editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
