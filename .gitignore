@@ -1,6 +1,9 @@
-# Dados operacionais (nunca commitar)
+# Dados operacionais (nunca commitar — contem dados pessoais LGPD)
 outputs/
 data/
+*.xlsx
+*.xls
+RelatorioNotasPendentes*
 
 # Python
 __pycache__/
