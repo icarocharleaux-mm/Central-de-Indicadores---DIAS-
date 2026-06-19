@@ -31,11 +31,19 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&display=swap');
 
 /* Base */
-html, body, [class*="css"], .stApp, p, div, span, label {
+html, body, [class*="css"], .stApp, p, div, label {
     font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif !important;
     font-size: 16px !important;
 }
 .block-container { padding: 1rem 2rem 2rem !important; max-width: 1400px !important; }
+
+/* Oculta botão de colapso da sidebar e ícone que vira texto */
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapseButton"] { display: none !important; }
+/* Previne que ícones Material não carregados apareçam como texto */
+.material-symbols-rounded, .material-icons { font-size: 0 !important; }
+button[kind="header"] > div > span { display: none !important; }
 
 /* KPI cards */
 [data-testid="metric-container"] {
@@ -365,10 +373,11 @@ with tab1:
         d = df["Status de Entrega"].value_counts().reset_index()
         d.columns = ["Status", "Qtd"]
         d["Pct"] = (d["Qtd"] / d["Qtd"].sum() * 100).round(1)
+        d["label"] = d.apply(lambda r: f"{r['Qtd']:,.0f}  ({r['Pct']:.1f}%)", axis=1)
         fig = px.bar(d, x="Qtd", y="Status", orientation="h",
                      color="Qtd",
                      color_continuous_scale=[[0, DEEP], [1, TEAL]],
-                     text=d.apply(lambda r: f"{r['Qtd']:,.0f}  ({r['Pct']:.1f}%)", axis=1))
+                     text="label")
         fig.update_traces(marker_line_width=0, textposition="outside",
                           textfont=dict(size=14))
         fig.update_layout(coloraxis_showscale=False,
@@ -417,10 +426,12 @@ with tab1:
         d = df["Tipo Entrega"].value_counts().reset_index()
         d.columns = ["Tipo", "Qtd"]
         d["Pct"] = (d["Qtd"] / d["Qtd"].sum() * 100).round(1)
-        fig = px.bar(d.head(20), x="Tipo", y="Qtd",
+        d20 = d.head(20).copy()
+        d20["label"] = d20["Pct"].apply(lambda x: f"{x:.1f}%")
+        fig = px.bar(d20, x="Tipo", y="Qtd",
                      color="Qtd",
                      color_continuous_scale=[[0, DEEP], [1, TEAL]],
-                     text=d.head(20)["Pct"].apply(lambda x: f"{x:.1f}%"))
+                     text="label")
         fig.update_traces(marker_line_width=0, textposition="outside",
                           textfont=dict(size=13))
         fig.update_layout(coloraxis_showscale=False, xaxis_title="")
@@ -476,7 +487,7 @@ with tab2:
         d3 = d.sort_values("Valor", ascending=True)
         fig = px.bar(d3, y="Filial", x="Valor", orientation="h",
                      color_discrete_sequence=[DEEP],
-                     text=d3["Valor"].apply(lambda x: f"R$ {x/1e3:.0f}k" if x >= 1000 else f"R$ {x:.0f}"))
+                     text=d3["Valor"].apply(lambda x: f"R$ {x/1e3:.0f}k" if x >= 1000 else f"R$ {x:.0f}").tolist())
         fig.update_traces(marker_line_width=0, textposition="outside",
                           textfont=dict(size=14))
         fig.update_layout(xaxis_title="Valor NF (R$)")
@@ -525,7 +536,7 @@ with tab3:
         fig = px.bar(d2, y="Cliente", x="Valor", orientation="h",
                      color="Valor",
                      color_continuous_scale=[[0, DEEP],[1, TEAL]],
-                     text=d2["Valor"].apply(lambda x: f"R$ {x/1e3:.0f}k" if x >= 1000 else f"R$ {x:.0f}"))
+                     text=d2["Valor"].apply(lambda x: f"R$ {x/1e3:.0f}k" if x >= 1000 else f"R$ {x:.0f}").tolist())
         fig.update_traces(marker_line_width=0, textposition="outside",
                           textfont=dict(size=13))
         fig.update_layout(coloraxis_showscale=False, xaxis_title="Valor NF (R$)")
@@ -536,6 +547,16 @@ with tab3:
 # TAB 4 — SLA / ATRASO
 # ════════════════════════════════════════════════════════════════════════════════
 with tab4:
+
+    # Nota sobre cobertura dos dados
+    max_embarque = df["Embarque"].dropna().min() if "Embarque" in df.columns else None
+    st.info(
+        f"ℹ️ **Cobertura do relatório:** embarques de "
+        f"{max_embarque:%d/%m/%Y} a {datetime.now():%d/%m/%Y} (90 dias). "
+        "O **Dias em Atraso** é calculado como `hoje − Data Prazo`, "
+        "portanto NFs com prazo curto embarcadas há >30 dias podem acumular atrasos elevados. "
+        "NFs com atraso muito superior à janela de embarque merecem investigação individual."
+    )
 
     st.markdown('<div class="sec">Faixas de Atraso</div>', unsafe_allow_html=True)
     if "Em Atraso" in df.columns and df["Em Atraso"].any():
@@ -564,7 +585,7 @@ with tab4:
             d2.columns = ["Faixa","Valor"]
             fig = px.bar(d2, x="Faixa", y="Valor",
                          color_discrete_sequence=[SALMON],
-                         text=d2["Valor"].apply(lambda x: f"R$ {x/1e3:.0f}k" if pd.notna(x) and x >= 1000 else ""),
+                         text=d2["Valor"].apply(lambda x: f"R$ {x/1e3:.0f}k" if pd.notna(x) and x >= 1000 else "").tolist(),
                          title="Valor em Risco por Faixa (R$)")
             fig.update_traces(marker_line_width=0, textposition="outside",
                               textfont=dict(size=14))
