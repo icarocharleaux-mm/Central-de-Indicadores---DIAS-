@@ -22,21 +22,25 @@ FONT   = "Barlow Condensed, Arial Narrow, sans-serif"
 
 CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap');
 
-html, body, [class*="css"], .stApp, p, div, label, span:not([data-testid]) {
-    font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif !important;
+:root{
+  --bg:#0B2E3A; --panel:#0E3847; --card:#123347; --border:#1C4F62;
+  --teal:#2DC5B4; --teal2:#1A8090; --text:#E8F4F3; --muted:#8DB4C0;
+  --amber:#F59E0B; --red:#EF4444; --green:#10B981;
 }
-.block-container { padding: 1.2rem 2rem 2rem !important; }
 
+html, body, [class*="css"], .stApp, p, div, label, span:not([data-testid]),
+button, input, select, textarea {
+    font-family: 'Montserrat', sans-serif !important;
+}
+.stApp { background: var(--bg) !important; }
+.block-container { padding: 1rem 1.6rem 2rem !important; max-width: 100% !important; }
+
+/* Sidebar (só navegação de páginas) */
 [data-testid="stSidebar"] {
-    background: #09293A !important;
-    border-right: 1px solid rgba(45,197,180,.25) !important;
-}
-[data-testid="stSidebar"] label {
-    font-size: 14px !important; font-weight: 700 !important;
-    text-transform: uppercase; letter-spacing: .05em;
-    color: rgba(255,255,255,.8) !important;
+    background: #09222E !important;
+    border-right: 1px solid var(--border) !important;
 }
 button[data-testid="stSidebarCollapseButton"] span,
 button[data-testid="stBaseButton-headerNoPadding"] span {
@@ -44,46 +48,76 @@ button[data-testid="stBaseButton-headerNoPadding"] span {
 }
 button[data-testid="stSidebarCollapseButton"]::before,
 button[data-testid="stBaseButton-headerNoPadding"]::before {
-    content: "◀"; visibility: visible; font-size: 14px; color: #2DC5B4;
+    content: "◀"; visibility: visible; font-size: 14px; color: var(--teal);
 }
 [data-testid="stSidebarCollapsedControl"] button::before {
-    content: "▶"; visibility: visible; font-size: 14px; color: #2DC5B4;
+    content: "▶"; visibility: visible; font-size: 14px; color: var(--teal);
 }
 [data-testid="stSidebarCollapsedControl"] button span {
     visibility: hidden !important; width: 0 !important;
 }
-[data-testid="metric-container"] {
-    background: rgba(45,197,180,.09) !important;
-    border: 1px solid rgba(45,197,180,.32) !important;
-    border-radius: 14px !important; padding: 16px 18px !important;
+
+/* Painéis = containers com borda (st.container(border=True)) */
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    background: var(--panel); border: 1px solid var(--border) !important;
+    border-radius: 10px; padding: 4px 6px;
+}
+
+/* Filtros compactos */
+[data-testid="stWidgetLabel"] label, label[data-testid="stWidgetLabel"] {
+    font-size: 11px !important; font-weight: 700 !important;
+    text-transform: uppercase; letter-spacing: .6px; color: var(--muted) !important;
+}
+[data-baseweb="select"] > div {
+    background: var(--card) !important; border-color: var(--border) !important;
+    font-size: 13px !important; min-height: 36px;
+}
+[data-baseweb="tag"] { background: var(--teal2) !important; }
+
+/* KPI cards */
+[data-testid="stMetric"], [data-testid="metric-container"] {
+    background: var(--card) !important; border: 1px solid var(--border) !important;
+    border-radius: 10px !important; padding: 12px 16px !important;
 }
 [data-testid="stMetricLabel"] {
-    font-size: 13px !important; font-weight: 700 !important;
-    text-transform: uppercase; letter-spacing: .06em;
-    color: rgba(255,255,255,.65) !important;
+    font-size: 11px !important; font-weight: 600 !important;
+    text-transform: uppercase; letter-spacing: .6px; color: var(--muted) !important;
 }
 [data-testid="stMetricValue"] {
-    font-size: 38px !important; font-weight: 900 !important;
-    color: #2DC5B4 !important; font-variant-numeric: tabular-nums;
-    line-height: 1.1 !important;
+    font-size: 30px !important; font-weight: 900 !important;
+    color: var(--text) !important; font-variant-numeric: tabular-nums; line-height: 1.1 !important;
 }
-[data-testid="stMetricDelta"] { font-size: 14px !important; }
+[data-testid="stMetricDelta"] { font-size: 12px !important; }
+
+/* Tabs no topo */
+[data-testid="stTabs"] [data-baseweb="tab-list"] { gap: 4px; border-bottom: 1px solid var(--border); }
 [data-testid="stTabs"] [data-baseweb="tab"] {
-    font-size: 15px !important; font-weight: 700 !important;
-    text-transform: uppercase; letter-spacing: .03em; padding: 9px 16px !important;
+    font-size: 13px !important; font-weight: 600 !important;
+    padding: 9px 18px !important; color: var(--muted) !important;
+    border-radius: 8px 8px 0 0;
 }
-[data-testid="stTabs"] [aria-selected="true"] { color: #2DC5B4 !important; }
+[data-testid="stTabs"] [aria-selected="true"] {
+    color: var(--teal) !important; background: var(--panel) !important;
+    border-bottom: 3px solid var(--teal) !important;
+}
+
+/* Título de seção (estilo ptitle do modelo) */
 .sec {
-    font-size: 20px !important; font-weight: 900; color: #fff;
-    text-transform: uppercase; letter-spacing: .06em;
-    border-left: 5px solid #2DC5B4; padding-left: 12px; margin: 24px 0 14px;
+    font-size: 13px !important; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .8px;
+    padding: 4px 0 10px 2px; margin: 4px 0 6px;
 }
-.fbadge {
-    background: rgba(45,197,180,.12); border: 1px solid rgba(45,197,180,.35);
-    border-radius: 8px; padding: 8px 14px; font-size: 14px;
-    color: rgba(255,255,255,.75); margin-bottom: 8px;
+
+/* Box de insight / badge de filtros */
+.insight, .fbadge {
+    background: var(--card); border-left: 3px solid var(--teal);
+    border-radius: 0 8px 8px 0; padding: 10px 16px; font-size: 13px;
+    color: var(--muted); margin: 6px 0;
 }
+.insight strong { color: var(--text); }
+
 footer { visibility: hidden; }
+[data-testid="stToolbar"] { display: none; }
 </style>
 """
 
@@ -92,18 +126,26 @@ def inject_css():
     st.markdown(CSS, unsafe_allow_html=True)
 
 
-def header_html(titulo_destaque: str, subtitulo: str) -> str:
+def header_html(titulo_destaque: str, subtitulo: str, badge: str = "",
+                badge_cor: str = SALMON) -> str:
+    badge_html = (f"""<div style="margin-left:auto;background:{badge_cor};color:#fff;
+        font-size:12px;font-weight:700;padding:7px 16px;border-radius:20px;
+        white-space:nowrap;align-self:center">{badge}</div>""" if badge else "")
     return f"""
-<div style="background:linear-gradient(135deg,#0B2E3A 0%,#1D7A8A 100%);
-            border-radius:16px;padding:24px 38px;margin-bottom:18px;
-            border:1px solid rgba(45,197,180,.4)">
-  <div style="font-size:clamp(26px,3.4vw,48px);font-weight:900;color:#fff;
-              text-transform:uppercase;letter-spacing:.04em;line-height:1.05;
-              font-family:'Barlow Condensed',sans-serif">
-    CENTRAL DE <span style="color:{TEAL}">{titulo_destaque}</span>
+<div style="position:relative;background:
+       linear-gradient(90deg, rgba(11,46,58,.97) 40%, rgba(29,122,138,.85) 100%),
+       linear-gradient(135deg,#0B2E3A 0%,#1D7A8A 100%);
+     border-radius:14px;padding:20px 32px;margin-bottom:14px;
+     border:1px solid var(--border);display:flex;align-items:center;gap:16px">
+  <div>
+    <div style="font-size:clamp(22px,3vw,38px);font-weight:900;color:#fff;
+                letter-spacing:.5px;line-height:1.05;font-family:'Montserrat',sans-serif">
+      CENTRAL DE <span style="color:{TEAL}">{titulo_destaque}</span>
+    </div>
+    <div style="font-size:13px;color:{ '#8DB4C0' };margin-top:5px;
+                font-family:'Montserrat',sans-serif">{subtitulo}</div>
   </div>
-  <div style="font-size:15px;color:rgba(255,255,255,.55);margin-top:4px;
-              font-family:'Barlow Condensed',sans-serif">{subtitulo}</div>
+  {badge_html}
 </div>"""
 
 

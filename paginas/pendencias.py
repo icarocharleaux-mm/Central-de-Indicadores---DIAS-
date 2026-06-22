@@ -12,14 +12,9 @@ from comum import (TEAL, DEEP, SALMON, AMBER, GREEN, FONT, fmt, barh,
 
 cabecalho = st.empty()
 
-# ── Sidebar: dados ────────────────────────────────────────────────────────────
+# ── Sidebar: fonte de dados + configuração ────────────────────────────────────
 with st.sidebar:
-    st.markdown(f"""<div style="font-family:'Barlow Condensed',sans-serif;
-        font-size:24px;font-weight:900;color:{TEAL};text-transform:uppercase;
-        letter-spacing:.06em;padding:4px 0 2px">🔍 FILTROS</div>""",
-        unsafe_allow_html=True)
-    st.divider()
-
+    st.markdown("**FONTE DE DADOS**")
     fonte = st.radio("Fonte dos dados",
                      ["☁️ Google Sheets (automático)", "📤 Enviar arquivo"],
                      label_visibility="collapsed")
@@ -32,7 +27,7 @@ if fonte == "☁️ Google Sheets (automático)":
     try:
         df_raw = carregar_sheets(SHEET_CSV)
         with st.sidebar:
-            st.success(f"☁️ Google Sheets · {len(df_raw):,} NFs")
+            st.success(f"☁️ {len(df_raw):,} NFs")
     except Exception as e:
         with st.sidebar:
             st.error("Não consegui ler o Google Sheets. Verifique se a planilha "
@@ -47,19 +42,29 @@ else:
     with st.sidebar:
         st.success(f"📂 {upload.name} · {len(df_raw):,} NFs")
 
-# Data/hora do consolidado (carimbada no upload). Fallback: não informado.
+with st.sidebar:
+    meta_sla = st.number_input("🎯 Meta de SLA (%)", min_value=50, max_value=100,
+                               value=95, step=1)
+    if st.button("🔄 Atualizar dados", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+    st.caption("diaslog.com.br")
+
+# Data/hora do consolidado + selo de alerta no header
 _atualizado = "não informado"
 if "Atualizado em" in df_raw.columns and df_raw["Atualizado em"].notna().any():
     _ts = pd.to_datetime(df_raw["Atualizado em"].dropna().iloc[0],
                          errors="coerce", dayfirst=True)
     _atualizado = _ts.strftime("%d/%m/%Y %H:%M") if pd.notna(_ts) \
                   else str(df_raw["Atualizado em"].dropna().iloc[0])
+_n_atraso = int(df_raw["Atrasado"].sum()) if "Atrasado" in df_raw.columns else 0
 cabecalho.markdown(header_html("INDICADORES",
-    f"Dias+ &nbsp;·&nbsp; Pendências Operacionais &nbsp;·&nbsp; "
-    f"🔄 Dados atualizados em <b style='color:{TEAL}'>{_atualizado}</b>"),
+    f"Dias+ · Pendências Operacionais · 🔄 Atualizado em "
+    f"<b style='color:{TEAL}'>{_atualizado}</b>",
+    badge=f"🔴 {_n_atraso:,} NFs EM ATRASO".replace(",", ".")),
     unsafe_allow_html=True)
 
-# ── Sidebar: filtros ──────────────────────────────────────────────────────────
+# ── Barra de filtros no topo ──────────────────────────────────────────────────
 def ms(label, col, only=None):
     if col not in df_raw.columns:
         return []
@@ -67,39 +72,32 @@ def ms(label, col, only=None):
     if only is not None:
         vals = [v for v in vals if only(v)]
     opts = sorted(vals)
-    return st.multiselect(label, opts, placeholder="Todos",
-                          label_visibility="visible") if opts else []
+    return st.multiselect(label, opts, placeholder="Todos") if opts else []
 
-with st.sidebar:
-    st.markdown("**📅 Período de Embarque**")
-    if "Embarque" in df_raw.columns and df_raw["Embarque"].notna().any():
-        datas = df_raw["Embarque"].dropna()
-        d_min, d_max = datas.min().date(), datas.max().date()
-        intervalo = st.date_input("", value=(d_min, d_max), min_value=d_min,
-                                  max_value=d_max, label_visibility="collapsed")
-        data_ini = intervalo[0] if len(intervalo) > 0 else d_min
-        data_fim = intervalo[1] if len(intervalo) > 1 else d_max
-    else:
-        data_ini = data_fim = None
-
-    sel_regional = ms("🗺️ Regional", "Regional", only=lambda r: r != "Outros")
-    sel_filiais = ms("🏢 Filial", "Filial", only=eh_filial)
-    sel_fe      = ms("🚚 Filial de Entrega", "Filial de Entrega", only=eh_filial)
-    sel_transp  = ms("🚛 Motorista", "Motorista")
-    sel_cli     = ms("👤 Cliente", "Cliente")
-    sel_status  = ms("📦 Status de Entrega", "Status de Entrega")
-    sel_tipo    = ms("🔖 Tipo de Entrega", "Tipo Entrega")
-    sel_risco   = ms("🛡️ Risco GR", "Risco GR")
-
-    st.divider()
-    so_atraso = st.toggle("⚠️ Somente em atraso", value=False)
-    meta_sla = st.number_input("🎯 Meta de SLA (%)", min_value=50, max_value=100,
-                               value=95, step=1)
-    st.divider()
-    if st.button("🔄 Atualizar dados", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
-    st.caption("diaslog.com.br")
+with st.container(border=True):
+    st.markdown("**🔍 FILTROS**")
+    r1 = st.columns(4)
+    with r1[0]:
+        if "Embarque" in df_raw.columns and df_raw["Embarque"].notna().any():
+            datas = df_raw["Embarque"].dropna()
+            d_min, d_max = datas.min().date(), datas.max().date()
+            intervalo = st.date_input("📅 Período de Embarque", value=(d_min, d_max),
+                                      min_value=d_min, max_value=d_max)
+            data_ini = intervalo[0] if len(intervalo) > 0 else d_min
+            data_fim = intervalo[1] if len(intervalo) > 1 else d_max
+        else:
+            data_ini = data_fim = None
+    with r1[1]: sel_regional = ms("🗺️ Regional", "Regional", only=lambda r: r != "Outros")
+    with r1[2]: sel_filiais = ms("🏢 Filial", "Filial", only=eh_filial)
+    with r1[3]: sel_cli     = ms("👤 Cliente", "Cliente")
+    r2 = st.columns(4)
+    with r2[0]: sel_status  = ms("📦 Status de Entrega", "Status de Entrega")
+    with r2[1]: sel_fe      = ms("🚚 Filial de Entrega", "Filial de Entrega", only=eh_filial)
+    with r2[2]: sel_transp  = ms("🚛 Motorista", "Motorista")
+    with r2[3]: sel_tipo    = ms("🔖 Tipo de Entrega", "Tipo Entrega")
+    r3 = st.columns(4)
+    with r3[0]: sel_risco   = ms("🛡️ Risco GR", "Risco GR")
+    with r3[1]: so_atraso   = st.toggle("⚠️ Somente em atraso", value=False)
 
 # ── Aplicar filtros ───────────────────────────────────────────────────────────
 df = df_raw.copy()

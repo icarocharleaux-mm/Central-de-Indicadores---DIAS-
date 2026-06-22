@@ -12,13 +12,9 @@ from comum import (TEAL, DEEP, SALMON, AMBER, GREEN, FONT, fmt, barh,
 
 cabecalho = st.empty()
 
-# ── Sidebar: dados ────────────────────────────────────────────────────────────
+# ── Sidebar: fonte de dados ───────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown(f"""<div style="font-family:'Barlow Condensed',sans-serif;
-        font-size:24px;font-weight:900;color:{TEAL};text-transform:uppercase;
-        letter-spacing:.06em;padding:4px 0 2px">🚚 ENTREGAS</div>""",
-        unsafe_allow_html=True)
-    st.divider()
+    st.markdown("**FONTE DE DADOS**")
     fonte = st.radio("Fonte dos dados",
                      ["☁️ Google Sheets (automático)", "📤 Enviar arquivo"],
                      label_visibility="collapsed", key="fonte_viagens")
@@ -32,7 +28,7 @@ if fonte == "☁️ Google Sheets (automático)":
     try:
         dfv = carregar_viagens_sheets(VIAGENS_CSV)
         with st.sidebar:
-            st.success(f"☁️ Google Sheets · {len(dfv):,} linhas")
+            st.success(f"☁️ {len(dfv):,} linhas")
     except Exception as e:
         with st.sidebar:
             st.warning("Aba 'Viagens' ainda não disponível no Google Sheets. "
@@ -47,34 +43,41 @@ else:
     with st.sidebar:
         st.success(f"📂 {upload.name} · {len(dfv):,} linhas")
 
-cabecalho.markdown(header_html("ENTREGAS",
-    "Dias+ &nbsp;·&nbsp; Produtividade & Sucesso de Entregas"),
-    unsafe_allow_html=True)
-
-# ── Sidebar: filtros ──────────────────────────────────────────────────────────
-def ms(label, col):
-    if col not in dfv.columns:
-        return []
-    opts = sorted(dfv[col].dropna().unique())
-    return st.multiselect(label, opts, placeholder="Todos",
-                          label_visibility="visible") if opts else []
-
 with st.sidebar:
-    # Filtro por data de entrega
-    sel_data = None
-    if "Data Entrega" in dfv.columns and dfv["Data Entrega"].notna().any():
-        dts = sorted(dfv["Data Entrega"].dropna().dt.date.unique())
-        opc = ["Todas"] + [d.strftime("%d/%m/%Y") for d in dts]
-        esc = st.selectbox("📅 Data de Entrega", opc, index=0)
-        if esc != "Todas":
-            sel_data = datetime.strptime(esc, "%d/%m/%Y").date()
-    sel_fil = ms("🏢 Filial", "Filial")
-    sel_mot = ms("🚛 Motorista", "Motorista")
-    st.divider()
     if st.button("🔄 Atualizar dados", use_container_width=True, key="ref_viagens"):
         st.cache_data.clear()
         st.rerun()
     st.caption("diaslog.com.br")
+
+# Selo de alerta: taxa de sucesso geral (dados sem filtro)
+_suc = pd.to_numeric(dfv.get("Sucessos"), errors="coerce").sum() if "Sucessos" in dfv.columns else 0
+_ins = pd.to_numeric(dfv.get("Insucessos"), errors="coerce").sum() if "Insucessos" in dfv.columns else 0
+_taxa = _suc / (_suc + _ins) * 100 if (_suc + _ins) else 0
+cabecalho.markdown(header_html("ENTREGAS",
+    "Dias+ · Produtividade & Sucesso de Entregas",
+    badge=f"✅ {_taxa:.1f}% DE SUCESSO", badge_cor=GREEN),
+    unsafe_allow_html=True)
+
+# ── Barra de filtros no topo ──────────────────────────────────────────────────
+def ms(label, col):
+    if col not in dfv.columns:
+        return []
+    opts = sorted(dfv[col].dropna().unique())
+    return st.multiselect(label, opts, placeholder="Todos") if opts else []
+
+with st.container(border=True):
+    st.markdown("**🔍 FILTROS**")
+    fc = st.columns(3)
+    with fc[0]:
+        sel_data = None
+        if "Data Entrega" in dfv.columns and dfv["Data Entrega"].notna().any():
+            dts = sorted(dfv["Data Entrega"].dropna().dt.date.unique())
+            opc = ["Todas"] + [d.strftime("%d/%m/%Y") for d in dts]
+            esc = st.selectbox("📅 Data de Entrega", opc, index=0)
+            if esc != "Todas":
+                sel_data = datetime.strptime(esc, "%d/%m/%Y").date()
+    with fc[1]: sel_fil = ms("🏢 Filial", "Filial")
+    with fc[2]: sel_mot = ms("🚛 Motorista", "Motorista")
 
 # ── Aplicar filtros ───────────────────────────────────────────────────────────
 d = dfv.copy()
