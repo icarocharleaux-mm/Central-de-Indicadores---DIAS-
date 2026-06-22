@@ -37,25 +37,12 @@ button, input, select, textarea {
 .stApp { background: var(--bg) !important; }
 .block-container { padding: 1rem 1.6rem 2rem !important; max-width: 100% !important; }
 
-/* Sidebar (só navegação de páginas) */
+/* Sidebar (navegação de páginas + fonte de dados) */
 [data-testid="stSidebar"] {
     background: #09222E !important;
     border-right: 1px solid var(--border) !important;
 }
-button[data-testid="stSidebarCollapseButton"] span,
-button[data-testid="stBaseButton-headerNoPadding"] span {
-    visibility: hidden !important; width: 0 !important;
-}
-button[data-testid="stSidebarCollapseButton"]::before,
-button[data-testid="stBaseButton-headerNoPadding"]::before {
-    content: "◀"; visibility: visible; font-size: 14px; color: var(--teal);
-}
-[data-testid="stSidebarCollapsedControl"] button::before {
-    content: "▶"; visibility: visible; font-size: 14px; color: var(--teal);
-}
-[data-testid="stSidebarCollapsedControl"] button span {
-    visibility: hidden !important; width: 0 !important;
-}
+/* botões nativos de recolher/expandir a sidebar ficam como padrão */
 
 /* Painéis = containers com borda (st.container(border=True)) */
 div[data-testid="stVerticalBlockBorderWrapper"] {
