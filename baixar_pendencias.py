@@ -507,15 +507,27 @@ async def baixar_resumo_viagens(page, ctx) -> Path | None:
     await page.wait_for_timeout(500)
     await page.screenshot(path=str(PASTA_SAIDA / "viagens_form.png"))
 
-    # 6) Gerar Relatorio (link pequeno) -> pode abrir nova aba OU usar a propria pagina
-    log("Clicando em 'Gerar Relatorio'...")
-    gerar = page.locator(
-        "a:has-text('Gerar Relatório'), a:has-text('Gerar Relatorio'), "
-        "input[value*='Gerar' i], button:has-text('Gerar'), "
-        "*:has-text('Gerar Relatório') >> visible=true").first
+    # 6) Gerar Relatorio: o link é o ÍCONE ao lado do texto. Localiza o elemento
+    #    clicavel (img/a/input) proximo ao texto "Gerar Relatorio" e marca com id.
+    marcado = await page.evaluate("""() => {
+        const xp = document.evaluate(
+            "//*[contains(normalize-space(.),'Gerar Relat')]",
+            document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+        if (!xp.snapshotLength) return 'sem-texto';
+        const node = xp.snapshotItem(xp.snapshotLength - 1);  // mais especifico
+        const cont = node.closest('td, div, span, p, a') || node.parentElement;
+        let alvo = cont.querySelector("a, img, input[type='image']")
+                 || node.previousElementSibling || node;
+        alvo.id = '__gerar_btn';
+        return alvo.tagName + (alvo.onclick ? '(onclick)' : '');
+    }""")
+    log(f"Alvo do 'Gerar Relatorio': {marcado}")
+    if marcado == "sem-texto":
+        raise RuntimeError("Texto 'Gerar Relatorio' nao encontrado na pagina.")
+
     try:
         async with ctx.expect_page(timeout=20_000) as nova_aba_info:
-            await gerar.click()
+            await page.locator("#__gerar_btn").click()
         aba = await nova_aba_info.value
         log("Relatorio abriu em nova aba.")
     except PWTimeout:
