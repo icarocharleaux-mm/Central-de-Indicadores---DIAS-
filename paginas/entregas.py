@@ -44,7 +44,7 @@ else:
         st.success(f"📂 {upload.name} · {len(dfv):,} linhas")
 
 with st.sidebar:
-    if st.button("🔄 Atualizar dados", use_container_width=True, key="ref_viagens"):
+    if st.button("🔄 Atualizar dados", width="stretch", key="ref_viagens"):
         st.cache_data.clear()
         st.rerun()
     st.caption("diaslog.com.br")
@@ -136,7 +136,7 @@ with tab0:
                                  "Entregas roteirizadas por Filial (top 15)",
                                  text_col="label", cbar_title="entregas",
                                  h=max(420, len(g1) * 28)),
-                            use_container_width=True)
+                            width="stretch")
         with c2:
             g2 = g[g["Resolvidas"] >= 20].dropna(subset=["Sucesso%"]).sort_values("Sucesso%").tail(15)
             g2["label"] = lbl_pct(g2["Sucesso%"])
@@ -145,7 +145,7 @@ with tab0:
                                  text_col="label", color_col="Sucesso%",
                                  scale=[[0, SALMON], [.6, AMBER], [1, GREEN]],
                                  cbar_title="%", h=max(420, len(g2) * 28)),
-                            use_container_width=True)
+                            width="stretch")
 
     if "Modelo Veiculo" in d.columns:
         st.markdown('<div class="sec">Frota — Entregas por Modelo de Veículo</div>',
@@ -157,7 +157,7 @@ with tab0:
         st.plotly_chart(barh(fr, "Entregas", "Modelo Veiculo",
                              "Entregas por modelo (top 15)", text_col="label",
                              cbar_title="entregas", h=max(380, len(fr) * 28)),
-                        use_container_width=True)
+                        width="stretch")
 
 # ── TAB 1 — Motoristas ────────────────────────────────────────────────────────
 with tab1:
@@ -180,7 +180,7 @@ with tab1:
                              f"Top {n} motoristas por entregas roteirizadas",
                              text_col="label", cbar_title="entregas",
                              h=max(440, n * 26)),
-                        use_container_width=True)
+                        width="stretch")
 
         st.markdown('<div class="sec">Maior nº de Insucessos</div>',
                     unsafe_allow_html=True)
@@ -193,7 +193,7 @@ with tab1:
                                  f"Top {n} motoristas por insucessos",
                                  text_col="label", color_fixed=SALMON,
                                  h=max(440, len(mi) * 26)),
-                            use_container_width=True)
+                            width="stretch")
 
 # ── TAB 2 — Insucessos ────────────────────────────────────────────────────────
 with tab2:
@@ -214,7 +214,7 @@ with tab2:
                              text_col="label", color_col="Qtd",
                              scale=[[0, AMBER], [1, SALMON]], cbar_title="qtd",
                              h=max(420, min(len(mv), 15) * 32)),
-                        use_container_width=True)
+                        width="stretch")
 
 # ── TAB 3 — Dados ─────────────────────────────────────────────────────────────
 with tab3:
@@ -228,8 +228,8 @@ with tab3:
         csv = d[base_cols].to_csv(index=False).encode("utf-8-sig")
         st.download_button("⬇ Exportar CSV", data=csv,
                            file_name=f"viagens_{datetime.now():%Y%m%d}.csv",
-                           mime="text/csv", use_container_width=True)
-    st.dataframe(d[base_cols], use_container_width=True, height=560,
+                           mime="text/csv", width="stretch")
+    st.dataframe(d[base_cols], width="stretch", height=560,
         column_config={
             "Data Entrega": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
         })

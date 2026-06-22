@@ -46,7 +46,7 @@ else:
 with st.sidebar:
     meta_sla = st.number_input("🎯 Meta de SLA (%)", min_value=50, max_value=100,
                                value=95, step=1)
-    if st.button("🔄 Atualizar dados", use_container_width=True):
+    if st.button("🔄 Atualizar dados", width="stretch"):
         st.cache_data.clear()
         st.rerun()
     st.caption("diaslog.com.br")
@@ -187,7 +187,7 @@ with tab0:
         gfig.update_layout(paper_bgcolor="rgba(0,0,0,0)", height=240,
                            margin=dict(l=20, r=20, t=10, b=10),
                            font=dict(family=FONT, color="#fff"))
-        st.plotly_chart(gfig, use_container_width=True)
+        st.plotly_chart(gfig, width="stretch")
     with gc2:
         no_prazo = total - atraso
         st.markdown(
@@ -215,7 +215,7 @@ with tab0:
             reg1["label"] = lbl_int(reg1["Total"])
             st.plotly_chart(barh(reg1, "Total", "Regional", "NFs Pendentes por Regional",
                                  text_col="label", cbar_title="NFs", h=300),
-                            use_container_width=True)
+                            width="stretch")
         with rc2:
             reg2 = reg.sort_values("% Atraso")
             reg2["label"] = lbl_pct(reg2["% Atraso"])
@@ -223,7 +223,7 @@ with tab0:
                                  text_col="label", color_col="% Atraso",
                                  scale=[[0, GREEN], [.4, AMBER], [1, SALMON]],
                                  cbar_title="%", h=300),
-                            use_container_width=True)
+                            width="stretch")
 
     st.markdown('<div class="sec">Semáforo de Filiais</div>', unsafe_allow_html=True)
     if "É Filial" in df.columns and df["É Filial"].any():
@@ -238,7 +238,7 @@ with tab0:
                    text_col="label", color_col="% Atraso",
                    scale=[[0, GREEN], [.4, AMBER], [1, SALMON]],
                    cbar_title="% atraso", h=max(440, len(s) * 28))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     c1, c2 = st.columns(2)
     with c1:
@@ -249,7 +249,7 @@ with tab0:
             d["label"] = lbl_int(d["Qtd"])
             st.plotly_chart(barh(d, "Qtd", "Status", "NFs por Status",
                                  text_col="label", cbar_title="NFs", h=360),
-                            use_container_width=True)
+                            width="stretch")
     with c2:
         st.markdown('<div class="sec">SLA Geral (Efetividade)</div>', unsafe_allow_html=True)
         no_prazo = total - atraso
@@ -264,7 +264,7 @@ with tab0:
             showlegend=False, paper_bgcolor="rgba(0,0,0,0)",
             font=dict(color="#fff", family=FONT), height=360,
             margin=dict(t=20, b=20, l=20, r=20))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     st.markdown('<div class="sec">Tendência Semanal de Embarque</div>', unsafe_allow_html=True)
     if "Embarque" in df.columns and df["Embarque"].notna().any():
@@ -284,7 +284,7 @@ with tab0:
                           yaxis2=dict(title="Atraso", overlaying="y", side="right",
                                       gridcolor="rgba(0,0,0,0)", color=SALMON,
                                       tickfont=dict(color=SALMON, size=13)))
-        st.plotly_chart(fmt(fig, 320, legend_h=True), use_container_width=True)
+        st.plotly_chart(fmt(fig, 320, legend_h=True), width="stretch")
 
     st.markdown('<div class="sec">Evolução do SLA (mensal)</div>', unsafe_allow_html=True)
     if "Embarque" in df.columns and df["Embarque"].notna().any():
@@ -307,7 +307,7 @@ with tab0:
                       annotation_font=dict(color=AMBER, size=13))
         fig.update_layout(title="% de NFs no prazo por mês de embarque",
                           yaxis=dict(title="SLA %", range=[0, 105]))
-        st.plotly_chart(fmt(fig, 340), use_container_width=True)
+        st.plotly_chart(fmt(fig, 340), width="stretch")
 
     st.markdown('<div class="sec">🔥 Top Ofensores — maior valor parado em atraso</div>',
                 unsafe_allow_html=True)
@@ -320,7 +320,7 @@ with tab0:
                    if c in of.columns]
         of = of.sort_values("Valor NF", ascending=False).head(20)[cols_of]
         st.caption("As 20 NFs em atraso de maior valor — priorize estas para destravar caixa.")
-        st.dataframe(of, use_container_width=True, hide_index=True, height=420,
+        st.dataframe(of, width="stretch", hide_index=True, height=420,
             column_config={
                 "Dias Atraso": st.column_config.NumberColumn("Atraso", format="%d d"),
                 "Valor NF": st.column_config.NumberColumn("Valor NF", format="R$ %.2f"),
@@ -364,7 +364,7 @@ with tab0:
                                 range=[0, 105], color=SALMON,
                                 tickfont=dict(color=SALMON, size=13)))
                 fig.update_xaxes(tickangle=-40)
-                st.plotly_chart(fmt(fig, 380, legend_h=True), use_container_width=True)
+                st.plotly_chart(fmt(fig, 380, legend_h=True), width="stretch")
 
 # ── TAB 1 — Filiais ───────────────────────────────────────────────────────────
 with tab1:
@@ -391,7 +391,7 @@ with tab1:
         fig.update_layout(barmode="overlay", title="Total NFs vs. Em Atraso",
                           yaxis=dict(categoryorder="total ascending", automargin=True))
         st.plotly_chart(fmt(fig, max(440, len(dd) * 28), legend_h=True),
-                        use_container_width=True)
+                        width="stretch")
 
         c1, c2 = st.columns(2)
         with c1:
@@ -402,7 +402,7 @@ with tab1:
                                  text_col="label", color_col="% Atraso",
                                  scale=[[0, GREEN], [.4, AMBER], [1, SALMON]],
                                  cbar_title="%", h=max(440, len(d2) * 26)),
-                            use_container_width=True)
+                            width="stretch")
         with c2:
             st.markdown('<div class="sec">Valor em Aberto</div>', unsafe_allow_html=True)
             d3 = d.sort_values("Valor")
@@ -410,13 +410,13 @@ with tab1:
             st.plotly_chart(barh(d3, "Valor", "Filial", "Valor por Filial",
                                  text_col="label", cbar_title="R$",
                                  h=max(440, len(d3) * 26)),
-                            use_container_width=True)
+                            width="stretch")
 
         st.markdown('<div class="sec">Detalhamento por Filial</div>',
                     unsafe_allow_html=True)
         chave = ["Filial", "Regional"] if "Regional" in df.columns else "Filial"
         det = tabela_detalhe(df[df["É Filial"]], chave)
-        st.dataframe(estilo_detalhe(det), use_container_width=True,
+        st.dataframe(estilo_detalhe(det), width="stretch",
                      hide_index=True, height=min(560, 40 + len(det) * 36))
 
 # ── TAB 2 — Motoristas ────────────────────────────────────────────────────────
@@ -445,7 +445,7 @@ with tab2:
                           title=f"Top {n} Motoristas — NFs vs. Atraso",
                           yaxis=dict(categoryorder="total ascending", automargin=True))
         st.plotly_chart(fmt(fig, max(460, n * 28), legend_h=True),
-                        use_container_width=True)
+                        width="stretch")
 
         st.markdown('<div class="sec">Piores % de Atraso (mín. 50 NFs)</div>',
                     unsafe_allow_html=True)
@@ -456,7 +456,7 @@ with tab2:
                              text_col="label", color_col="% Atraso",
                              scale=[[0, GREEN], [.4, AMBER], [1, SALMON]],
                              cbar_title="%", h=max(440, len(rel) * 28)),
-                        use_container_width=True)
+                        width="stretch")
 
 # ── TAB 3 — Causa-Raiz ────────────────────────────────────────────────────────
 with tab3:
@@ -469,7 +469,7 @@ with tab3:
         st.plotly_chart(barh(o, "Qtd", "Ocorrência", "Top 15 Ocorrências",
                              text_col="label", color_fixed=SALMON,
                              h=max(420, len(o) * 30)),
-                        use_container_width=True)
+                        width="stretch")
     else:
         st.info("Sem ocorrências registradas no recorte atual.")
 
@@ -484,7 +484,7 @@ with tab3:
                              text_col="label", color_col="Qtd",
                              scale=[[0, AMBER], [1, SALMON]], cbar_title="NFs",
                              h=max(420, len(so) * 30)),
-                        use_container_width=True)
+                        width="stretch")
     else:
         st.info("Sem subocorrências registradas no recorte atual.")
 
@@ -509,7 +509,7 @@ with tab4:
         fig.update_layout(xaxis_title="")
         f4 = fmt(fig, 360)
         f4.update_layout(coloraxis_showscale=True, coloraxis_colorbar_title="NFs")
-        st.plotly_chart(f4, use_container_width=True)
+        st.plotly_chart(f4, width="stretch")
     with c2:
         av = (dfa.groupby("Faixa Aging", observed=True)
               .agg(Valor=("Valor NF", "sum")).reindex(labels).reset_index())
@@ -522,7 +522,7 @@ with tab4:
         fig.update_traces(marker_line_width=0, textposition="outside",
                           textfont=dict(size=15, family=FONT))
         fig.update_layout(xaxis_title="")
-        st.plotly_chart(fmt(fig, 360), use_container_width=True)
+        st.plotly_chart(fmt(fig, 360), width="stretch")
 
     st.markdown('<div class="sec">Exposição por Nível de Risco (GR)</div>',
                 unsafe_allow_html=True)
@@ -535,7 +535,7 @@ with tab4:
                              "Valor em Aberto por Nível de Risco",
                              text_col="label", color_col="Valor",
                              scale=[[0, TEAL], [1, SALMON]], cbar_title="R$", h=320),
-                        use_container_width=True)
+                        width="stretch")
     else:
         st.info("Coluna de Nível de Risco não disponível.")
 
@@ -566,7 +566,7 @@ with tab5:
         fig.update_layout(barmode="overlay", title=f"Top {n} Clientes",
                           yaxis=dict(categoryorder="total ascending", automargin=True))
         st.plotly_chart(fmt(fig, max(460, n * 28), legend_h=True),
-                        use_container_width=True)
+                        width="stretch")
 
         st.markdown('<div class="sec">Valor em Aberto por Cliente</div>',
                     unsafe_allow_html=True)
@@ -575,7 +575,7 @@ with tab5:
         st.plotly_chart(barh(cv, "Valor", "Cliente", f"Top {n} — Valor em Aberto",
                              text_col="label", cbar_title="R$",
                              h=max(460, n * 28)),
-                        use_container_width=True)
+                        width="stretch")
 
         st.markdown('<div class="sec">% em Atraso por Cliente (mín. 50 NFs)</div>',
                     unsafe_allow_html=True)
@@ -586,12 +586,12 @@ with tab5:
                              text_col="label", color_col="% Atraso",
                              scale=[[0, GREEN], [.4, AMBER], [1, SALMON]],
                              cbar_title="%", h=max(440, len(rel) * 28)),
-                        use_container_width=True)
+                        width="stretch")
 
         st.markdown('<div class="sec">Detalhamento por Cliente</div>',
                     unsafe_allow_html=True)
         detc = tabela_detalhe(df, "Cliente")
-        st.dataframe(estilo_detalhe(detc), use_container_width=True,
+        st.dataframe(estilo_detalhe(detc), width="stretch",
                      hide_index=True, height=min(620, 40 + len(detc) * 36))
 
 # ── TAB 6 — Dados ─────────────────────────────────────────────────────────────
@@ -609,9 +609,9 @@ with tab6:
         csv = df[cols_show].to_csv(index=False).encode("utf-8-sig")
         st.download_button("⬇ Exportar CSV", data=csv,
                            file_name=f"pendencias_{datetime.now():%Y%m%d}.csv",
-                           mime="text/csv", use_container_width=True)
+                           mime="text/csv", width="stretch")
 
-    st.dataframe(df[cols_show], use_container_width=True, height=580,
+    st.dataframe(df[cols_show], width="stretch", height=580,
         column_config={
             "Atrasado":     st.column_config.CheckboxColumn("Atrasado"),
             "Dias Atraso":  st.column_config.NumberColumn("Atraso", format="%d d"),
