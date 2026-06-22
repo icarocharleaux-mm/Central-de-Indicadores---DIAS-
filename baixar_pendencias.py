@@ -525,24 +525,44 @@ async def baixar_resumo_viagens(page, ctx) -> Path | None:
     if marcado == "sem-texto":
         raise RuntimeError("Texto 'Gerar Relatorio' nao encontrado na pagina.")
 
+    log("Aguardando a nova aba do relatorio abrir (pode demorar ate 3 min)...")
     try:
-        async with ctx.expect_page(timeout=20_000) as nova_aba_info:
+        async with ctx.expect_page(timeout=180_000) as nova_aba_info:
             await page.locator("#__gerar_btn").click()
         aba = await nova_aba_info.value
         log("Relatorio abriu em nova aba.")
     except PWTimeout:
-        log("Nao abriu nova aba; usando a propria pagina.")
+        log("Nova aba nao abriu em 3 min; tentando na propria pagina.")
         aba = page
-    await aba.wait_for_load_state("networkidle", timeout=60_000)
+    await aba.wait_for_load_state("networkidle", timeout=120_000)
+    await aba.wait_for_timeout(2000)
 
-    # 7) Exportar para Excel -> download
-    log("Clicando em 'Exportar para Excel'...")
+    # 7) Exportar para Excel -> download (pode ser icone, igual ao Gerar)
+    exp = await aba.evaluate("""() => {
+        const buscar = (txt) => document.evaluate(
+            "//*[contains(normalize-space(.),'" + txt + "')]",
+            document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+        let xp = buscar('Exportar para Excel');
+        if (!xp.snapshotLength) xp = buscar('Exportar');
+        if (!xp.snapshotLength) xp = buscar('Excel');
+        if (!xp.snapshotLength) return 'sem-texto';
+        const node = xp.snapshotItem(xp.snapshotLength - 1);
+        const cont = node.closest('td, div, span, p, a') || node.parentElement;
+        let alvo = cont.querySelector("a, img, input[type='image'], button")
+                 || node.previousElementSibling || node;
+        alvo.id = '__exp_btn';
+        return alvo.tagName;
+    }""")
+    log(f"Alvo do 'Exportar para Excel': {exp}")
+
     async with aba.expect_download(timeout=120_000) as dl_info:
-        await aba.locator(
-            "a:has-text('Exportar para Excel'), a:has-text('Exportar'), "
-            "a:has-text('Excel'), input[value*='Excel' i], "
-            "button:has-text('Excel'), [title*='Excel' i], img[title*='Excel' i]"
-        ).first.click()
+        if exp != "sem-texto":
+            await aba.locator("#__exp_btn").click()
+        else:
+            await aba.locator(
+                "a:has-text('Excel'), input[value*='Excel' i], "
+                "button:has-text('Excel'), [title*='Excel' i], "
+                "img[title*='Excel' i]").first.click()
     download = await dl_info.value
     destino = PASTA_SAIDA / f"resumo_viagens_{HOJE:%Y%m%d}.xlsx"
     await download.save_as(destino)
