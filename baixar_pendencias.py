@@ -91,8 +91,8 @@ WEBAPP_TOKEN = os.environ.get("SHEETS_WEBAPP_TOKEN", "")
 COLUNAS_UPLOAD = [
     "NF", "Status de Entrega", "Efetividade", "Peso", "Valor NF", "Volumes",
     "Cliente", "Tipo Entrega", "Região", "Cidade", "Filial", "Filial de Entrega",
-    "Embarque", "Data Prazo", "Data Bipagem Filial", "Motorista última viagem",
-    "Ocorrência", "Subocorrencia", "Nivel de Risco",
+    "Embarque", "Data Prazo", "Data última viagem", "Data Bipagem Filial",
+    "Motorista última viagem", "Ocorrência", "Subocorrencia", "Nivel de Risco",
 ]
 
 # ── Periodos (90 dias divididos em dois blocos de ~45 dias) ───────────────────
