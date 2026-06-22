@@ -190,9 +190,9 @@ def _processar(df: pd.DataFrame) -> pd.DataFrame:
         df["Risco GR"] = (pd.to_numeric(df["Nivel de Risco"], errors="coerce")
                           .map(MAPA_RISCO).fillna("Não classificado"))
 
-    # 8) Transportadora (motorista da última viagem)
+    # 8) Motorista (motorista da última viagem)
     if "Motorista última viagem" in df.columns:
-        df["Transportadora"] = df["Motorista última viagem"].fillna("Sem transportadora")
+        df["Motorista"] = df["Motorista última viagem"].fillna("Sem motorista")
 
     # 9) Separa filial real (UF + cidade) de clientes/parceiros contaminando a coluna
     if "Filial" in df.columns:
@@ -376,7 +376,7 @@ with st.sidebar:
 
     sel_filiais = ms("🏢 Filial", "Filial", only=_eh_filial)
     sel_fe      = ms("🚚 Filial de Entrega", "Filial de Entrega", only=_eh_filial)
-    sel_transp  = ms("🚛 Transportadora", "Transportadora")
+    sel_transp  = ms("🚛 Motorista", "Motorista")
     sel_cli     = ms("👤 Cliente", "Cliente")
     sel_status  = ms("📦 Status de Entrega", "Status de Entrega")
     sel_tipo    = ms("🔖 Tipo de Entrega", "Tipo Entrega")
@@ -398,7 +398,7 @@ def f(df, col, sel):
 
 df = f(df, "Filial", sel_filiais)
 df = f(df, "Filial de Entrega", sel_fe)
-df = f(df, "Transportadora", sel_transp)
+df = f(df, "Motorista", sel_transp)
 df = f(df, "Cliente", sel_cli)
 df = f(df, "Status de Entrega", sel_status)
 df = f(df, "Tipo Entrega", sel_tipo)
@@ -425,8 +425,8 @@ atraso  = int(df["Atrasado"].sum())
 pct_at  = atraso / total * 100 if total else 0
 valor_risco = df.loc[df["Atrasado"], "Valor NF"].sum() if "Valor NF" in df.columns else 0
 parado7 = int((df["Dias Parado"] > 7).sum())
-n_transp = df.loc[df["Transportadora"] != "Sem transportadora", "Transportadora"].nunique() \
-           if "Transportadora" in df.columns else 0
+n_transp = df.loc[df["Motorista"] != "Sem motorista", "Motorista"].nunique() \
+           if "Motorista" in df.columns else 0
 
 k1, k2, k3, k4, k5 = st.columns(5)
 k1.metric("NFs Pendentes", f"{total:,.0f}")
@@ -435,7 +435,7 @@ k2.metric("Em Atraso", f"{atraso:,.0f}", delta=f"{pct_at:.1f}% do total",
 k3.metric("Valor em Risco", f"R$ {valor_risco/1e6:.2f}M" if valor_risco >= 1e6
           else f"R$ {valor_risco:,.0f}")
 k4.metric("Parado +7 dias", f"{parado7:,.0f}", delta="na filial", delta_color="off")
-k5.metric("Transportadoras", f"{n_transp:,.0f}")
+k5.metric("Motoristas", f"{n_transp:,.0f}")
 st.markdown("<div style='margin-top:6px'></div>", unsafe_allow_html=True)
 
 
@@ -443,7 +443,7 @@ st.markdown("<div style='margin-top:6px'></div>", unsafe_allow_html=True)
 tab0, tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "🚦  Resumo Executivo",
     "🏢  Filiais",
-    "🚚  Transportadoras",
+    "🚚  Motoristas",
     "🔎  Causa-Raiz",
     "⏱️  Aging & Risco",
     "👤  Clientes",
@@ -559,30 +559,30 @@ with tab1:
                                  h=max(440, len(d3) * 26)),
                             use_container_width=True)
 
-# ── TAB 2 — Transportadoras ───────────────────────────────────────────────────
+# ── TAB 2 — Motoristas ───────────────────────────────────────────────────
 with tab2:
-    if "Transportadora" not in df.columns:
-        st.info("Coluna de transportadora não disponível neste arquivo.")
+    if "Motorista" not in df.columns:
+        st.info("Coluna de motorista não disponível neste arquivo.")
     else:
-        dft = df[df["Transportadora"] != "Sem transportadora"]
-        n = st.slider("Transportadoras exibidas", 10, 40, 20, 5)
+        dft = df[df["Motorista"] != "Sem motorista"]
+        n = st.slider("Motoristas exibidos", 10, 40, 20, 5)
 
-        st.markdown('<div class="sec">Top Transportadoras — Volume vs. Atraso</div>',
+        st.markdown('<div class="sec">Top Motoristas — Volume vs. Atraso</div>',
                     unsafe_allow_html=True)
-        t = dft.groupby("Transportadora").agg(
+        t = dft.groupby("Motorista").agg(
             Total=("NF", "count"), Atraso=("Atrasado", "sum"),
             Valor=("Valor NF", "sum")).reset_index()
         t["% Atraso"] = (t["Atraso"] / t["Total"] * 100).round(1)
         top = t.sort_values("Total", ascending=True).tail(n)
         fig = go.Figure()
-        fig.add_trace(go.Bar(y=top["Transportadora"], x=top["Total"], orientation="h",
+        fig.add_trace(go.Bar(y=top["Motorista"], x=top["Total"], orientation="h",
                              name="Total", marker_color=TEAL, marker_line_width=0,
                              text=lbl_int(top["Total"]), textposition="outside",
                              textfont=dict(size=13, color="#fff", family=FONT)))
-        fig.add_trace(go.Bar(y=top["Transportadora"], x=top["Atraso"], orientation="h",
+        fig.add_trace(go.Bar(y=top["Motorista"], x=top["Atraso"], orientation="h",
                              name="Em Atraso", marker_color=SALMON, marker_line_width=0))
         fig.update_layout(barmode="overlay",
-                          title=f"Top {n} Transportadoras — NFs vs. Atraso",
+                          title=f"Top {n} Motoristas — NFs vs. Atraso",
                           yaxis=dict(categoryorder="total ascending", automargin=True))
         st.plotly_chart(fmt(fig, max(460, n * 28), legend_h=True),
                         use_container_width=True)
@@ -591,8 +591,8 @@ with tab2:
                     unsafe_allow_html=True)
         rel = t[t["Total"] >= 50].sort_values("% Atraso").tail(n)
         rel["label"] = lbl_pct(rel["% Atraso"])
-        st.plotly_chart(barh(rel, "% Atraso", "Transportadora",
-                             f"Transportadoras com maior % de atraso (≥50 NFs)",
+        st.plotly_chart(barh(rel, "% Atraso", "Motorista",
+                             f"Motoristas com maior % de atraso (≥50 NFs)",
                              text_col="label", color_col="% Atraso",
                              scale=[[0, GREEN], [.4, AMBER], [1, SALMON]],
                              cbar_title="%", h=max(440, len(rel) * 28)),
@@ -732,7 +732,7 @@ with tab5:
 with tab6:
     cols_show = [c for c in [
         "NF", "Status de Entrega", "Efetividade", "Filial", "Filial de Entrega",
-        "Transportadora", "Cliente", "Tipo Entrega", "Embarque", "Data Prazo",
+        "Motorista", "Cliente", "Tipo Entrega", "Embarque", "Data Prazo",
         "Atrasado", "Dias Atraso", "Dias Parado", "Risco GR", "Peso", "Valor NF",
         "Ocorrência", "Subocorrencia", "Cidade", "Região",
     ] if c in df.columns]
