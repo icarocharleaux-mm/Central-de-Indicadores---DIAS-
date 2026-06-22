@@ -67,6 +67,11 @@ if not USUARIO or not SENHA:
 # ── URLs ──────────────────────────────────────────────────────────────────────
 URL_LOGIN     = "https://sistema.diaslog.com.br/Login"
 URL_RELATORIO = "https://sistema.diaslog.com.br/restrito/Consulta_NotasPendentes.aspx"
+URL_VIAGENS   = "https://sistema.diaslog.com.br/restrito/Relatorio_ResumoViagens.aspx"
+
+# Resumo de Viagens: aba do Sheet e colunas que NAO sobem (ajudante=PF; setores=baguncado)
+VIAGENS_ABA       = "Viagens"
+VIAGENS_DESCARTAR = ["Ajudante", "Setores"]
 
 # ── Google Sheets (upload automatico do consolidado) ──────────────────────────
 # ID extraido do link compartilhado da planilha.
@@ -438,6 +443,121 @@ def enviar_para_sheets(arquivo_consolidado: Path):
     log(f"Resposta do Google Sheets: {retorno}")
 
 
+async def baixar_resumo_viagens(page, ctx) -> Path | None:
+    """Baixa o Relatorio de Resumo de Viagens do dia atual.
+
+    Passos (conforme operacao):
+      datas inicial=final=hoje | Tipo de Relatorio=Completo |
+      Tipo de Viagem=Normal | Filial=todos | Motorista=todos |
+      Cliente=todos | Tipo de Entrega=todos | Gerar Relatorio ->
+      abre nova aba -> Exportar para Excel.
+    """
+    hoje = HOJE.strftime("%d/%m/%Y")
+    log(f"--- Resumo de Viagens: {hoje} ---")
+    await page.goto(URL_VIAGENS, wait_until="networkidle", timeout=30_000)
+
+    # 1) Datas inicial e final = hoje (primeiros 2 campos de texto visiveis)
+    inputs = await page.locator("input[type='text']:visible").all()
+    log(f"Campos de texto encontrados: {len(inputs)}")
+    if len(inputs) >= 2:
+        await inputs[0].fill(hoje)
+        await inputs[1].fill(hoje)
+    else:
+        raise RuntimeError("Nao encontrei os campos de data inicial/final.")
+
+    # 2) Tipo de Relatorio = Completo (radio)
+    for radio in await page.locator("input[type='radio']").all():
+        txt = await radio.evaluate("""el => {
+            if (el.id) { const l=document.querySelector('label[for="'+el.id+'"]');
+                         if (l) return l.innerText; }
+            return el.parentElement ? el.parentElement.innerText : ''; }""")
+        if "completo" in (txt or "").lower():
+            if not await radio.is_checked():
+                await radio.check()
+            log("Tipo de Relatorio: Completo")
+            break
+
+    # 3) Tipo de Viagem: Normal marcado, Repasse desmarcado
+    for cb in await page.locator("input[type='checkbox']").all():
+        txt = (await _texto_checkbox(cb) or "").lower()
+        if "normal" in txt and not await cb.is_checked():
+            await cb.check()
+        elif "repasse" in txt and await cb.is_checked():
+            await cb.uncheck()
+
+    # 4) Filial e Motorista = todos (selects simples)
+    for sel in await page.locator("select:not([multiple]):not([size])").all():
+        opts = await sel.evaluate("el => Array.from(el.options).map(o => o.text.trim().toLowerCase())")
+        if "todos" in opts:
+            await sel.select_option(label=[o for o in await sel.evaluate(
+                "el => Array.from(el.options).map(o => o.text)") if o.strip().lower() == "todos"][0])
+
+    # 5) Cliente + Tipo de Entrega = todos (listboxes multi-selecao)
+    await selecionar_todos_listboxes(page)
+
+    # 6) Gerar Relatorio -> abre nova aba
+    log("Clicando em 'Gerar Relatorio'...")
+    async with ctx.expect_page(timeout=60_000) as nova_aba_info:
+        await page.locator(
+            "a:has-text('Gerar Relatório'), a:has-text('Gerar Relatorio'), "
+            "input[value*='Gerar' i], button:has-text('Gerar')"
+        ).first.click()
+    aba = await nova_aba_info.value
+    await aba.wait_for_load_state("networkidle", timeout=60_000)
+    log("Nova aba do relatorio aberta.")
+
+    # 7) Exportar para Excel -> download
+    async with aba.expect_download(timeout=120_000) as dl_info:
+        await aba.locator(
+            "a:has-text('Exportar para Excel'), a:has-text('Excel'), "
+            "input[value*='Excel' i], button:has-text('Excel'), [title*='Excel' i]"
+        ).first.click()
+    download = await dl_info.value
+    destino = PASTA_SAIDA / f"resumo_viagens_{HOJE:%Y%m%d}.xlsx"
+    await download.save_as(destino)
+    log(f"Resumo de Viagens salvo: {destino.name}")
+    return destino
+
+
+def _detectar_header_viagens(arq: Path) -> int:
+    probe = pd.read_excel(arq, engine="openpyxl", header=None, nrows=15)
+    for i in range(len(probe)):
+        if "Motorista" in [str(x).strip() for x in probe.iloc[i].tolist()]:
+            return i
+    return 7
+
+
+def enviar_viagens_para_sheets(arquivo: Path):
+    """Envia o Resumo de Viagens para a aba 'Viagens' do Sheet (mesmo Web App)."""
+    import urllib.request
+    import urllib.parse
+
+    if not WEBAPP_URL or not WEBAPP_TOKEN:
+        log("AVISO: SHEETS_WEBAPP_URL/TOKEN nao definidos. Upload de viagens ignorado.")
+        return
+
+    hdr = _detectar_header_viagens(arquivo)
+    df = pd.read_excel(arquivo, engine="openpyxl", header=hdr).dropna(how="all")
+    df = df[df["Motorista"].notna()].copy()
+    df = df.drop(columns=[c for c in VIAGENS_DESCARTAR if c in df.columns])
+
+    for col in df.columns:
+        if pd.api.types.is_datetime64_any_dtype(df[col]):
+            df[col] = df[col].dt.strftime("%Y-%m-%d")
+    df = df.where(pd.notna(df), "")
+    ts = datetime.fromtimestamp(arquivo.stat().st_mtime)
+    df["Atualizado em"] = ts.strftime("%d/%m/%Y %H:%M")
+
+    csv_bytes = df.to_csv(index=False).encode("utf-8")
+    url = WEBAPP_URL + "?" + urllib.parse.urlencode(
+        {"token": WEBAPP_TOKEN, "aba": VIAGENS_ABA})
+    req = urllib.request.Request(url, data=csv_bytes, method="POST",
+                                 headers={"Content-Type": "text/csv; charset=utf-8"})
+    log(f"Enviando {len(df)} linhas de viagens ao Web App (aba '{VIAGENS_ABA}')...")
+    with urllib.request.urlopen(req, timeout=180) as resp:
+        log(f"Resposta (viagens): {resp.read().decode('utf-8', errors='replace').strip()}")
+
+
 async def main():
     PASTA_SAIDA.mkdir(parents=True, exist_ok=True)
     log("=" * 55)
@@ -448,6 +568,7 @@ async def main():
     log("=" * 55)
 
     arquivos_baixados: list[Path] = []
+    arquivo_viagens: Path | None = None
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(channel="msedge", headless=HEADLESS)
@@ -460,6 +581,13 @@ async def main():
             for periodo in PERIODOS:
                 arq = await baixar_periodo(page, periodo)
                 arquivos_baixados.append(arq)
+
+            # Resumo de Viagens (nao interrompe o fluxo se falhar)
+            try:
+                arquivo_viagens = await baixar_resumo_viagens(page, ctx)
+            except Exception as e:
+                log(f"AVISO: falha ao baixar Resumo de Viagens: {e}")
+                await page.screenshot(path=str(PASTA_SAIDA / "erro_viagens.png"))
 
         except PWTimeout as e:
             log(f"TIMEOUT: {e}")
@@ -477,8 +605,14 @@ async def main():
         try:
             enviar_para_sheets(consolidado)
         except Exception as e:
-            log(f"AVISO: falha ao enviar para o Google Sheets: {e}")
+            log(f"AVISO: falha ao enviar pendencias para o Google Sheets: {e}")
             log("       O consolidado local foi salvo normalmente.")
+
+    if arquivo_viagens is not None:
+        try:
+            enviar_viagens_para_sheets(arquivo_viagens)
+        except Exception as e:
+            log(f"AVISO: falha ao enviar viagens para o Google Sheets: {e}")
 
     log("Concluido.")
 
