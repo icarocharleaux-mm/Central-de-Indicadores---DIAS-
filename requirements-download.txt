@@ -1,0 +1,10 @@
+# Dependencias do script de download/automacao (baixar_pendencias.py).
+# Rodam apenas na maquina local, NAO no Streamlit Cloud.
+#   py -m pip install -r requirements-download.txt
+#   py -m playwright install msedge
+playwright>=1.60.0
+pandas>=2.0.0
+openpyxl>=3.1.0
+gspread>=6.0.0
+gspread-dataframe>=4.0.0
+google-auth>=2.0.0

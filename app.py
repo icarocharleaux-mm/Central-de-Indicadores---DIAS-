@@ -119,30 +119,23 @@ DATE_COLS   = ["Data Pedido", "Data Emissão NF", "Embarque", "Data Prazo",
 NUM_COLS    = ["Peso", "Valor NF", "Volumes"]
 MAPA_RISCO  = {0: "Sem risco GR", 1: "Risco baixo", 2: "Risco médio", 3: "Risco alto"}
 
+# ── Fonte de dados padrão: Google Sheet público (alimentado pelo download) ────
+SHEET_ID  = "12_DwR-eL1fM-Aj77ZSFFxtTpLAC9PeN6FE2EoHTn-RA"
+SHEET_ABA = "Pendencias"
+SHEET_CSV = (f"https://docs.google.com/spreadsheets/d/{SHEET_ID}"
+             f"/gviz/tq?tqx=out:csv&sheet={SHEET_ABA}")
 
-# ── Carregamento robusto ──────────────────────────────────────────────────────
-@st.cache_data(show_spinner="Carregando dados...")
-def carregar(key: str, data: bytes) -> pd.DataFrame:
-    raw = io.BytesIO(data)
 
-    # 1) Detecta a linha do cabeçalho procurando a célula "NF" (varia 3↔7)
-    probe = pd.read_excel(raw, header=None, nrows=15, engine="openpyxl")
-    hdr = 0
-    for i in range(len(probe)):
-        if "NF" in [str(x).strip() for x in probe.iloc[i].tolist()]:
-            hdr = i
-            break
-    raw.seek(0)
-    df = pd.read_excel(raw, header=hdr, engine="openpyxl").dropna(how="all")
-
-    # 2) Mantém só linhas com NF numérica
+def _processar(df: pd.DataFrame) -> pd.DataFrame:
+    """Aplica limpeza, tipagem e métricas (SLA, aging, risco) sobre o DataFrame bruto."""
+    # Mantém só linhas com NF numérica
     if "NF" in df.columns:
         df = df[pd.to_numeric(df["NF"], errors="coerce").notna()].copy()
 
-    # 3) LGPD — remove dados pessoais
+    # LGPD — remove dados pessoais (redundante se a fonte já vem limpa)
     df = df.drop(columns=[c for c in LGPD_REMOVE if c in df.columns])
 
-    # 4) Limpa strings com padding e tipa colunas
+    # Limpa strings com padding e tipa colunas
     for c in df.select_dtypes(include="object").columns:
         df[c] = df[c].astype(str).str.strip().replace({"nan": None, "": None})
     for col in DATE_COLS:
@@ -186,6 +179,28 @@ def carregar(key: str, data: bytes) -> pd.DataFrame:
         df["Transportadora"] = df["Motorista última viagem"].fillna("Sem transportadora")
 
     return df
+
+
+@st.cache_data(show_spinner="Carregando do Google Sheets...", ttl=600)
+def carregar_sheets(url: str) -> pd.DataFrame:
+    """Lê a planilha pública (CSV) e processa. Cache de 10 min."""
+    df = pd.read_csv(url)
+    return _processar(df)
+
+
+@st.cache_data(show_spinner="Carregando arquivo...")
+def carregar(key: str, data: bytes) -> pd.DataFrame:
+    """Lê um Excel enviado manualmente (detecta a linha do cabeçalho)."""
+    raw = io.BytesIO(data)
+    probe = pd.read_excel(raw, header=None, nrows=15, engine="openpyxl")
+    hdr = 0
+    for i in range(len(probe)):
+        if "NF" in [str(x).strip() for x in probe.iloc[i].tolist()]:
+            hdr = i
+            break
+    raw.seek(0)
+    df = pd.read_excel(raw, header=hdr, engine="openpyxl").dropna(how="all")
+    return _processar(df)
 
 
 def encontrar_local() -> Path | None:
@@ -274,22 +289,33 @@ with st.sidebar:
         unsafe_allow_html=True)
     st.divider()
 
-    arquivo_local = encontrar_local()
-    arquivo_bytes, arquivo_key = None, None
-    if arquivo_local:
-        st.success(f"📂 {arquivo_local.name}")
-        arquivo_bytes = arquivo_local.read_bytes()
-        arquivo_key = arquivo_local.name
-    upload = st.file_uploader("Carregar arquivo (.xlsx)", type=["xlsx"])
-    if upload:
-        arquivo_bytes = upload.read()
-        arquivo_key = upload.name
+    fonte = st.radio("Fonte dos dados",
+                     ["☁️ Google Sheets (automático)", "📤 Enviar arquivo"],
+                     label_visibility="collapsed")
+    upload = None
+    if fonte == "📤 Enviar arquivo":
+        upload = st.file_uploader("Carregar arquivo (.xlsx)", type=["xlsx"])
 
-if arquivo_bytes is None:
-    st.info("👈 Carregue o relatório de Notas Pendentes (.xlsx) na barra lateral.")
-    st.stop()
-
-df_raw = carregar(arquivo_key, arquivo_bytes)
+# Carrega conforme a fonte escolhida
+df_raw = None
+if fonte == "☁️ Google Sheets (automático)":
+    try:
+        df_raw = carregar_sheets(SHEET_CSV)
+        with st.sidebar:
+            st.success(f"☁️ Google Sheets · {len(df_raw):,} NFs")
+    except Exception as e:
+        with st.sidebar:
+            st.error("Não consegui ler o Google Sheets. Verifique se a planilha "
+                     "está compartilhada como 'qualquer um com o link'.")
+            st.caption(f"Detalhe: {e}")
+        st.stop()
+else:
+    if upload is None:
+        st.info("👈 Envie o relatório de Notas Pendentes (.xlsx) na barra lateral.")
+        st.stop()
+    df_raw = carregar(upload.name, upload.read())
+    with st.sidebar:
+        st.success(f"📂 {upload.name} · {len(df_raw):,} NFs")
 
 # ── Sidebar: filtros ──────────────────────────────────────────────────────────
 def ms(label, col):

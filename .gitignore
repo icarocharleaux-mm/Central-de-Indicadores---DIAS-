@@ -5,11 +5,19 @@ data/
 *.xls
 RelatorioNotasPendentes*
 
+# Credenciais (NUNCA commitar)
+.env
+service_account.json
+*-credentials.json
+*.key.json
+client_secret*.json
+*.apps.googleusercontent.com.json
+*.json
+
 # Python
 __pycache__/
 *.pyc
 *.pyo
-.env
 *.log
 
 # Editor

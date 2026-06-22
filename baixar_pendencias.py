@@ -68,6 +68,22 @@ if not USUARIO or not SENHA:
 URL_LOGIN     = "https://sistema.diaslog.com.br/Login"
 URL_RELATORIO = "https://sistema.diaslog.com.br/restrito/Consulta_NotasPendentes.aspx"
 
+# ── Google Sheets (upload automatico do consolidado) ──────────────────────────
+# ID extraido do link compartilhado da planilha.
+SHEET_ID        = "12_DwR-eL1fM-Aj77ZSFFxtTpLAC9PeN6FE2EoHTn-RA"
+SHEET_ABA       = "Pendencias"  # nome da aba que recebe os dados
+# Chave da conta de servico (JSON). Fica ao lado do script, fora do Git.
+SERVICE_ACCOUNT = Path(__file__).resolve().parent / "service_account.json"
+
+# Colunas operacionais enviadas ao Sheet (sem dados pessoais LGPD).
+# Tudo que NAO estiver aqui nao sobe — minimiza exposicao de dados.
+COLUNAS_UPLOAD = [
+    "NF", "Status de Entrega", "Efetividade", "Peso", "Valor NF", "Volumes",
+    "Cliente", "Tipo Entrega", "Região", "Cidade", "Filial", "Filial de Entrega",
+    "Embarque", "Data Prazo", "Data Bipagem Filial", "Motorista última viagem",
+    "Ocorrência", "Subocorrencia", "Nivel de Risco",
+]
+
 # ── Periodos (90 dias divididos em dois blocos de ~45 dias) ───────────────────
 HOJE = datetime.today()
 
@@ -375,6 +391,55 @@ def consolidar(arquivos: list[Path]) -> Path:
     return destino
 
 
+def enviar_para_sheets(arquivo_consolidado: Path):
+    """Envia o consolidado (sem dados LGPD) para o Google Sheet.
+
+    Requer:
+      - service_account.json ao lado do script
+      - a planilha compartilhada com o e-mail da service account (Editor)
+    """
+    if not SERVICE_ACCOUNT.exists():
+        log("AVISO: service_account.json nao encontrado. Upload ao Sheets ignorado.")
+        log(f"       Coloque a chave em: {SERVICE_ACCOUNT}")
+        return
+
+    import gspread
+    from google.oauth2.service_account import Credentials
+    from gspread_dataframe import set_with_dataframe
+
+    log("Preparando dados para o Google Sheets...")
+    df = pd.read_excel(arquivo_consolidado, engine="openpyxl")
+
+    # 1) Mantem apenas colunas operacionais (descarta dados pessoais)
+    cols = [c for c in COLUNAS_UPLOAD if c in df.columns]
+    df = df[cols].copy()
+
+    # 2) Datas viram texto ISO (leitura limpa via CSV no dashboard)
+    for col in df.columns:
+        if pd.api.types.is_datetime64_any_dtype(df[col]):
+            df[col] = df[col].dt.strftime("%Y-%m-%d %H:%M:%S")
+    df = df.where(pd.notna(df), "")  # NaN -> vazio (Sheets nao aceita NaN)
+
+    # 3) Autentica e abre a planilha
+    escopo = ["https://www.googleapis.com/auth/spreadsheets",
+              "https://www.googleapis.com/auth/drive"]
+    creds = Credentials.from_service_account_file(str(SERVICE_ACCOUNT), scopes=escopo)
+    gc = gspread.authorize(creds)
+    planilha = gc.open_by_key(SHEET_ID)
+
+    # 4) Recria a aba (limpa dados antigos antes de gravar)
+    try:
+        aba = planilha.worksheet(SHEET_ABA)
+        aba.clear()
+    except gspread.WorksheetNotFound:
+        aba = planilha.add_worksheet(title=SHEET_ABA,
+                                     rows=len(df) + 10, cols=len(df.columns) + 2)
+
+    set_with_dataframe(aba, df, include_index=False, resize=True)
+    log(f"Enviado ao Google Sheets: {len(df)} linhas, {len(df.columns)} colunas "
+        f"(aba '{SHEET_ABA}').")
+
+
 async def main():
     PASTA_SAIDA.mkdir(parents=True, exist_ok=True)
     log("=" * 55)
@@ -410,7 +475,12 @@ async def main():
             await browser.close()
 
     if len(arquivos_baixados) == 2:
-        consolidar(arquivos_baixados)
+        consolidado = consolidar(arquivos_baixados)
+        try:
+            enviar_para_sheets(consolidado)
+        except Exception as e:
+            log(f"AVISO: falha ao enviar para o Google Sheets: {e}")
+            log("       O consolidado local foi salvo normalmente.")
 
     log("Concluido.")
 
