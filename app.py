@@ -286,8 +286,9 @@ def lbl_rs(s):
                    else (f"R$ {x/1e3:.0f}k" if x >= 1000 else f"R$ {x:,.0f}"))
 
 
-# ── Header ────────────────────────────────────────────────────────────────────
-st.markdown(f"""
+# ── Header (preenchido após carregar os dados, com a data do consolidado) ─────
+def _header_html(atualizado: str) -> str:
+    return f"""
 <div style="background:linear-gradient(135deg,#0B2E3A 0%,#1D7A8A 100%);
             border-radius:16px;padding:24px 38px;margin-bottom:18px;
             border:1px solid rgba(45,197,180,.4)">
@@ -298,10 +299,12 @@ st.markdown(f"""
   </div>
   <div style="font-size:15px;color:rgba(255,255,255,.55);margin-top:4px;
               font-family:'Barlow Condensed',sans-serif">
-    Dias+ &nbsp;·&nbsp; Pendências Operacionais &nbsp;·&nbsp; {datetime.now():%d/%m/%Y %H:%M}
+    Dias+ &nbsp;·&nbsp; Pendências Operacionais &nbsp;·&nbsp;
+    🔄 Dados atualizados em <b style="color:{TEAL}">{atualizado}</b>
   </div>
-</div>
-""", unsafe_allow_html=True)
+</div>"""
+
+cabecalho = st.empty()
 
 # ── Sidebar: dados ────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -338,6 +341,15 @@ else:
     df_raw = carregar(upload.name, upload.read())
     with st.sidebar:
         st.success(f"📂 {upload.name} · {len(df_raw):,} NFs")
+
+# Data/hora do consolidado (carimbada no upload). Fallback: não informado.
+_atualizado = "não informado"
+if "Atualizado em" in df_raw.columns and df_raw["Atualizado em"].notna().any():
+    _ts = pd.to_datetime(df_raw["Atualizado em"].dropna().iloc[0],
+                         errors="coerce", dayfirst=True)
+    _atualizado = _ts.strftime("%d/%m/%Y %H:%M") if pd.notna(_ts) \
+                  else str(df_raw["Atualizado em"].dropna().iloc[0])
+cabecalho.markdown(_header_html(_atualizado), unsafe_allow_html=True)
 
 # ── Sidebar: filtros ──────────────────────────────────────────────────────────
 def ms(label, col, only=None):

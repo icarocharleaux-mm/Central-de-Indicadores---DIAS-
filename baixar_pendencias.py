@@ -420,6 +420,10 @@ def enviar_para_sheets(arquivo_consolidado: Path):
             df[col] = df[col].dt.strftime("%Y-%m-%d %H:%M:%S")
     df = df.where(pd.notna(df), "")
 
+    # 2b) Carimba a data/hora do arquivo consolidado (exibida no dashboard)
+    ts = datetime.fromtimestamp(arquivo_consolidado.stat().st_mtime)
+    df["Atualizado em"] = ts.strftime("%d/%m/%Y %H:%M")
+
     # 3) Serializa em CSV e envia via POST (aba alvo + token vao na query string)
     csv_bytes = df.to_csv(index=False).encode("utf-8")
     url = WEBAPP_URL + "?" + urllib.parse.urlencode(
@@ -428,7 +432,7 @@ def enviar_para_sheets(arquivo_consolidado: Path):
         url, data=csv_bytes, method="POST",
         headers={"Content-Type": "text/csv; charset=utf-8"})
 
-    log(f"Enviando {len(df)} linhas x {len(cols)} colunas ao Web App...")
+    log(f"Enviando {len(df)} linhas x {len(df.columns)} colunas ao Web App...")
     with urllib.request.urlopen(req, timeout=180) as resp:
         retorno = resp.read().decode("utf-8", errors="replace").strip()
     log(f"Resposta do Google Sheets: {retorno}")
