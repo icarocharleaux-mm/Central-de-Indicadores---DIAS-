@@ -155,9 +155,10 @@ st.markdown("<div style='margin-top:6px'></div>", unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-tab0, tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab0, tab1, tabm, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "🚦  Resumo Executivo",
     "🏢  Filiais",
+    "🗓️  Matriz Filial × Data",
     "🚚  Motoristas",
     "🔎  Causa-Raiz",
     "⏱️  Aging & Risco",
@@ -418,6 +419,74 @@ with tab1:
         det = tabela_detalhe(df[df["É Filial"]], chave)
         st.dataframe(estilo_detalhe(det), width="stretch",
                      hide_index=True, height=min(560, 40 + len(det) * 36))
+
+# ── TAB Matriz — Filial × Data (réplica da dinâmica do gerente) ────────────────
+with tabm:
+    st.caption("Contagem (volumes) por Filial × Data — réplica da tabela dinâmica. "
+               "Use o filtro de Status no topo para ver 'Na Rua', 'Em separação' etc.")
+    mc = st.columns([2, 2, 3])
+    with mc[0]:
+        opc_data = [c for c in ["Embarque", "Data Prazo", "Data última viagem"]
+                    if c in df.columns]
+        dim_data = st.selectbox("Data (colunas)", opc_data,
+                                index=0, key="mtx_data")
+    with mc[1]:
+        gran = st.selectbox("Agrupar por", ["Dia", "Semana", "Mês"],
+                            index=0, key="mtx_gran")
+
+    base = df.dropna(subset=[dim_data]).copy()
+    if base.empty or "Filial" not in base.columns:
+        st.info("Sem dados para a data selecionada no recorte atual.")
+    else:
+        s = base[dim_data]
+        if gran == "Semana":
+            base["_c"] = s.dt.to_period("W").dt.start_time
+            fmt_col = lambda c: c.strftime("%d/%m")
+        elif gran == "Mês":
+            base["_c"] = s.dt.to_period("M").dt.start_time
+            fmt_col = lambda c: c.strftime("%m/%Y")
+        else:
+            base["_c"] = s.dt.normalize()
+            fmt_col = lambda c: c.strftime("%d/%m")
+
+        piv = base.pivot_table(index="Filial", columns="_c", values="NF",
+                               aggfunc="count", fill_value=0)
+        piv = piv.reindex(sorted(piv.columns), axis=1)
+
+        # Limita a 60 datas mais recentes para a tabela não explodir
+        cortou = False
+        if piv.shape[1] > 60:
+            piv = piv.iloc[:, -60:]
+            cortou = True
+        piv.columns = [fmt_col(c) for c in piv.columns]
+
+        piv["Total Geral"] = piv.sum(axis=1)
+        piv = piv.sort_values("Total Geral", ascending=False)
+        piv.loc["Total Geral"] = piv.sum(axis=0)
+
+        datacols = [c for c in piv.columns if c != "Total Geral"]
+        try:
+            vmax = float(piv.drop(index="Total Geral")[datacols].to_numpy().max()) or 1
+        except Exception:
+            vmax = 1
+
+        def _heat(v):
+            try:
+                v = float(v)
+            except Exception:
+                return ""
+            if v <= 0:
+                return "color:#456"
+            a = 0.10 + 0.65 * min(v / vmax, 1)
+            return f"background-color: rgba(45,197,180,{a:.2f})"
+
+        sty = (piv.style.format("{:,.0f}")
+               .map(_heat, subset=datacols)
+               .set_properties(subset=["Total Geral"], **{"font-weight": "700"}))
+        if cortou:
+            st.caption("Mostrando as 60 datas mais recentes — ajuste o **Período** "
+                       "no topo ou use Semana/Mês para ver mais.")
+        st.dataframe(sty, width="stretch", height=560)
 
 # ── TAB 2 — Motoristas ────────────────────────────────────────────────────────
 with tab2:
