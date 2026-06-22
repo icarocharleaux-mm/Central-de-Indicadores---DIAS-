@@ -648,6 +648,49 @@ with tab0:
                 "Valor NF": st.column_config.NumberColumn("Valor NF", format="R$ %.2f"),
             })
 
+    # Concentração de Risco — dependência da operação em poucos (curva de Pareto)
+    st.markdown('<div class="sec">Concentração de Risco</div>', unsafe_allow_html=True)
+    dims = [d for d in ["Cliente", "Filial", "Motorista"] if d in df.columns]
+    if dims and "Valor NF" in df.columns:
+        cd1, cd2 = st.columns([1, 3])
+        with cd1:
+            dim = st.radio("Concentração por", dims, key="conc_dim")
+            base = "Valor NF"
+        # Filial: considera só filiais reais; demais dimensões usam tudo
+        dfc = df[df["É Filial"]] if (dim == "Filial" and "É Filial" in df.columns) else df
+        g = (dfc.groupby(dim).agg(Valor=("Valor NF", "sum"), NFs=("NF", "count"))
+             .reset_index().sort_values("Valor", ascending=False))
+        g = g[g["Valor"] > 0]
+        if not g.empty:
+            tot = g["Valor"].sum()
+            g["acum%"] = (g["Valor"].cumsum() / tot * 100)
+            def share(n):
+                return g.head(n)["Valor"].sum() / tot * 100 if tot else 0
+            with cd1:
+                st.metric(f"Top 5 {dim.lower()}s", f"{share(5):.0f}%",
+                          help="Participação dos 5 maiores no valor total em aberto")
+                st.metric(f"Top 10 {dim.lower()}s", f"{share(10):.0f}%")
+                st.caption(f"{len(g)} {dim.lower()}s no total")
+            with cd2:
+                gp = g.head(15)
+                fig = go.Figure()
+                fig.add_trace(go.Bar(x=gp[dim], y=gp["Valor"], name="Valor",
+                                     marker_color=TEAL, marker_line_width=0))
+                fig.add_trace(go.Scatter(x=gp[dim], y=gp["acum%"], name="% acumulado",
+                                         yaxis="y2", mode="lines+markers",
+                                         line=dict(color=SALMON, width=3),
+                                         marker=dict(size=6, color=SALMON)))
+                fig.add_hline(y=80, line_dash="dash", line_color=AMBER, yref="y2",
+                              annotation_text="80%", annotation_font=dict(color=AMBER))
+                fig.update_layout(
+                    title=f"Curva de Pareto — valor em aberto por {dim.lower()} (top 15)",
+                    yaxis=dict(title="Valor (R$)"),
+                    yaxis2=dict(title="% acumulado", overlaying="y", side="right",
+                                range=[0, 105], color=SALMON,
+                                tickfont=dict(color=SALMON, size=13)))
+                fig.update_xaxes(tickangle=-40)
+                st.plotly_chart(fmt(fig, 380, legend_h=True), use_container_width=True)
+
 # ── TAB 1 — Filiais ───────────────────────────────────────────────────────────
 with tab1:
     if "É Filial" not in df.columns or not df["É Filial"].any():
