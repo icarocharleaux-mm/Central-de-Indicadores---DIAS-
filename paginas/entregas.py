@@ -65,7 +65,7 @@ with st.sidebar:
     if "Data Entrega" in dfv.columns and dfv["Data Entrega"].notna().any():
         dts = sorted(dfv["Data Entrega"].dropna().dt.date.unique())
         opc = ["Todas"] + [d.strftime("%d/%m/%Y") for d in dts]
-        esc = st.selectbox("📅 Data de Entrega", opc, index=len(opc) - 1)
+        esc = st.selectbox("📅 Data de Entrega", opc, index=0)
         if esc != "Todas":
             sel_data = datetime.strptime(esc, "%d/%m/%Y").date()
     sel_fil = ms("🏢 Filial", "Filial")
