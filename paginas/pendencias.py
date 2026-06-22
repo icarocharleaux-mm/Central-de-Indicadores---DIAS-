@@ -458,6 +458,8 @@ with tabm:
         if piv.shape[1] > 60:
             piv = piv.iloc[:, -60:]
             cortou = True
+        # mapa rótulo (dd/mm) -> valor real da data, para o drill-down
+        col_map = {fmt_col(c): c for c in piv.columns}
         piv.columns = [fmt_col(c) for c in piv.columns]
 
         piv["Total Geral"] = piv.sum(axis=1)
@@ -486,7 +488,42 @@ with tabm:
         if cortou:
             st.caption("Mostrando as 60 datas mais recentes — ajuste o **Período** "
                        "no topo ou use Semana/Mês para ver mais.")
-        st.dataframe(sty, width="stretch", height=560)
+        st.caption("👉 Clique numa **linha (filial)** e numa **coluna (data)** para "
+                   "abrir as NFs daquela célula.")
+        ev = st.dataframe(sty, width="stretch", height=520, key="mtx_tbl",
+                          on_select="rerun", selection_mode=["multi-row", "multi-column"])
+
+        # ── Drill-down: NFs da célula selecionada (filial + data) ─────────────
+        sel = ev.selection
+        fil_sel = piv.index[sel["rows"][0]] if sel["rows"] else None
+        lbl_sel = sel["columns"][0] if sel["columns"] else None
+        if fil_sel == "Total Geral":
+            fil_sel = None
+        if lbl_sel == "Total Geral":
+            lbl_sel = None
+
+        if fil_sel and lbl_sel and lbl_sel in col_map:
+            alvo = col_map[lbl_sel]
+            drill = base[(base["Filial"] == fil_sel) & (base["_c"] == alvo)]
+            st.markdown(f'<div class="sec">NFs · {fil_sel} · {lbl_sel} '
+                        f'({len(drill)})</div>', unsafe_allow_html=True)
+            cols_d = [c for c in ["NF", "Status de Entrega", "Cliente", "Motorista",
+                                  "Embarque", "Data Prazo", "Dias Atraso", "Valor NF",
+                                  "Ocorrência", "Subocorrencia"] if c in drill.columns]
+            st.dataframe(drill[cols_d], width="stretch", hide_index=True, height=360,
+                column_config={
+                    "Embarque": st.column_config.DateColumn("Embarque", format="DD/MM/YYYY"),
+                    "Data Prazo": st.column_config.DateColumn("Prazo", format="DD/MM/YYYY"),
+                    "Dias Atraso": st.column_config.NumberColumn("Atraso", format="%d d"),
+                    "Valor NF": st.column_config.NumberColumn("Valor NF", format="R$ %.2f"),
+                })
+            csv = drill[cols_d].to_csv(index=False).encode("utf-8-sig")
+            st.download_button("⬇ Exportar estas NFs", data=csv,
+                               file_name=f"nfs_{fil_sel}_{lbl_sel.replace('/','-')}.csv",
+                               mime="text/csv")
+        elif fil_sel or lbl_sel:
+            st.info("Selecione **uma filial (linha)** e **uma data (coluna)** "
+                    "para abrir as NFs.")
 
 # ── TAB 2 — Motoristas ────────────────────────────────────────────────────────
 with tab2:
