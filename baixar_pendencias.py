@@ -485,32 +485,51 @@ async def baixar_resumo_viagens(page, ctx) -> Path | None:
         elif "repasse" in txt and await cb.is_checked():
             await cb.uncheck()
 
-    # 4) Filial e Motorista = todos (selects simples)
-    for sel in await page.locator("select:not([multiple]):not([size])").all():
-        opts = await sel.evaluate("el => Array.from(el.options).map(o => o.text.trim().toLowerCase())")
-        if "todos" in opts:
-            await sel.select_option(label=[o for o in await sel.evaluate(
-                "el => Array.from(el.options).map(o => o.text)") if o.strip().lower() == "todos"][0])
+    # 4) Filial e Motorista ja vem como "todos" por padrao — nao mexe.
 
-    # 5) Cliente + Tipo de Entrega = todos (listboxes multi-selecao)
-    await selecionar_todos_listboxes(page)
+    # 5) Cliente + Tipo de Entrega = TODOS (listboxes multi-selecao)
+    #    Seleciona todas as opcoes de cada <select multiple>/<select size> e
+    #    dispara 'change' (ASP.NET registra a selecao). Retorna contagem por lista.
+    counts = await page.evaluate("""() => {
+        const sels = document.querySelectorAll('select[multiple], select[size]');
+        const r = [];
+        sels.forEach(sel => {
+            let n = 0;
+            for (const opt of sel.options) { opt.selected = true; n++; }
+            sel.dispatchEvent(new Event('change', {bubbles: true}));
+            r.push(n);
+        });
+        return r;
+    }""")
+    log(f"Listas multi-selecao marcadas (itens por lista): {counts}")
+    if not counts:
+        log("AVISO: nenhuma lista multi-selecao encontrada (Cliente/Tipo Entrega).")
+    await page.wait_for_timeout(500)
+    await page.screenshot(path=str(PASTA_SAIDA / "viagens_form.png"))
 
-    # 6) Gerar Relatorio -> abre nova aba
+    # 6) Gerar Relatorio (link pequeno) -> pode abrir nova aba OU usar a propria pagina
     log("Clicando em 'Gerar Relatorio'...")
-    async with ctx.expect_page(timeout=60_000) as nova_aba_info:
-        await page.locator(
-            "a:has-text('Gerar Relatório'), a:has-text('Gerar Relatorio'), "
-            "input[value*='Gerar' i], button:has-text('Gerar')"
-        ).first.click()
-    aba = await nova_aba_info.value
+    gerar = page.locator(
+        "a:has-text('Gerar Relatório'), a:has-text('Gerar Relatorio'), "
+        "input[value*='Gerar' i], button:has-text('Gerar'), "
+        "*:has-text('Gerar Relatório') >> visible=true").first
+    try:
+        async with ctx.expect_page(timeout=20_000) as nova_aba_info:
+            await gerar.click()
+        aba = await nova_aba_info.value
+        log("Relatorio abriu em nova aba.")
+    except PWTimeout:
+        log("Nao abriu nova aba; usando a propria pagina.")
+        aba = page
     await aba.wait_for_load_state("networkidle", timeout=60_000)
-    log("Nova aba do relatorio aberta.")
 
     # 7) Exportar para Excel -> download
+    log("Clicando em 'Exportar para Excel'...")
     async with aba.expect_download(timeout=120_000) as dl_info:
         await aba.locator(
-            "a:has-text('Exportar para Excel'), a:has-text('Excel'), "
-            "input[value*='Excel' i], button:has-text('Excel'), [title*='Excel' i]"
+            "a:has-text('Exportar para Excel'), a:has-text('Exportar'), "
+            "a:has-text('Excel'), input[value*='Excel' i], "
+            "button:has-text('Excel'), [title*='Excel' i], img[title*='Excel' i]"
         ).first.click()
     download = await dl_info.value
     destino = PASTA_SAIDA / f"resumo_viagens_{HOJE:%Y%m%d}.xlsx"
