@@ -410,6 +410,8 @@ with st.sidebar:
 
     st.divider()
     so_atraso = st.toggle("⚠️ Somente em atraso", value=False)
+    meta_sla = st.number_input("🎯 Meta de SLA (%)", min_value=50, max_value=100,
+                               value=95, step=1)
     st.divider()
     if st.button("🔄 Atualizar dados", use_container_width=True):
         st.cache_data.clear()
@@ -483,6 +485,43 @@ tab0, tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 
 # ── TAB 0 — Resumo Executivo ──────────────────────────────────────────────────
 with tab0:
+    # SLA Geral vs Meta (medidor executivo)
+    sla_atual = round(100 - pct_at, 1)
+    st.markdown('<div class="sec">SLA Geral vs Meta</div>', unsafe_allow_html=True)
+    gc1, gc2 = st.columns([2, 3])
+    with gc1:
+        cor_sla = GREEN if sla_atual >= meta_sla else SALMON
+        gfig = go.Figure(go.Indicator(
+            mode="gauge+number+delta", value=sla_atual,
+            number={"suffix": "%", "font": {"size": 46, "color": cor_sla}},
+            delta={"reference": meta_sla, "suffix": " p.p.",
+                   "increasing": {"color": GREEN}, "decreasing": {"color": SALMON}},
+            gauge={"axis": {"range": [0, 100], "tickfont": {"color": "#fff"}},
+                   "bar": {"color": cor_sla},
+                   "threshold": {"line": {"color": "#fff", "width": 3},
+                                 "value": meta_sla},
+                   "steps": [{"range": [0, meta_sla], "color": "rgba(196,122,119,.25)"},
+                             {"range": [meta_sla, 100], "color": "rgba(91,196,138,.25)"}]},
+        ))
+        gfig.update_layout(paper_bgcolor="rgba(0,0,0,0)", height=240,
+                           margin=dict(l=20, r=20, t=10, b=10),
+                           font=dict(family=FONT, color="#fff"))
+        st.plotly_chart(gfig, use_container_width=True)
+    with gc2:
+        no_prazo = total - atraso
+        st.markdown(
+            f"""<div style="padding:14px 4px;font-family:{FONT}">
+            <div style="font-size:17px;color:rgba(255,255,255,.8)">
+            Das <b>{total:,.0f}</b> NFs pendentes, <b style="color:{GREEN}">{no_prazo:,.0f}</b>
+            estão no prazo e <b style="color:{SALMON}">{atraso:,.0f}</b> em atraso.</div>
+            <div style="font-size:17px;margin-top:10px;color:rgba(255,255,255,.8)">
+            SLA atual: <b style="color:{('#5BC48A' if sla_atual>=meta_sla else '#C47A77')}">
+            {sla_atual:.1f}%</b> &nbsp;·&nbsp; Meta: <b>{meta_sla}%</b> &nbsp;·&nbsp;
+            Gap: <b>{sla_atual-meta_sla:+.1f} p.p.</b></div>
+            <div style="font-size:15px;margin-top:10px;color:rgba(255,255,255,.55)">
+            Valor parado em atraso: <b style="color:{SALMON}">R$ {valor_risco/1e6:.2f}M</b></div>
+            </div>""".replace(",", "."), unsafe_allow_html=True)
+
     # Visão por Regional (SP, Interior, Sul, RJ)
     if "Regional" in df.columns and (df["Regional"] != "Outros").any():
         st.markdown('<div class="sec">Visão por Regional</div>', unsafe_allow_html=True)
@@ -566,6 +605,48 @@ with tab0:
                                       gridcolor="rgba(0,0,0,0)", color=SALMON,
                                       tickfont=dict(color=SALMON, size=13)))
         st.plotly_chart(fmt(fig, 320, legend_h=True), use_container_width=True)
+
+    # Evolução mensal do SLA vs Meta
+    st.markdown('<div class="sec">Evolução do SLA (mensal)</div>', unsafe_allow_html=True)
+    if "Embarque" in df.columns and df["Embarque"].notna().any():
+        tmp = df.dropna(subset=["Embarque"]).copy()
+        tmp["Mês"] = tmp["Embarque"].dt.to_period("M").dt.start_time
+        ev = tmp.groupby("Mês").agg(Total=("NF", "count"),
+                                    Atraso=("Atrasado", "sum")).reset_index()
+        ev = ev[ev["Total"] >= 20]  # ignora meses com amostra irrelevante
+        ev["SLA"] = ((ev["Total"] - ev["Atraso"]) / ev["Total"] * 100).round(1)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=ev["Mês"], y=ev["SLA"], mode="lines+markers+text",
+                                 line=dict(color=TEAL, width=3),
+                                 marker=dict(size=8, color=TEAL),
+                                 text=[f"{v:.0f}%" for v in ev["SLA"]],
+                                 textposition="top center",
+                                 textfont=dict(size=13, color="#fff", family=FONT),
+                                 name="SLA"))
+        fig.add_hline(y=meta_sla, line_dash="dash", line_color=AMBER,
+                      annotation_text=f"Meta {meta_sla}%",
+                      annotation_font=dict(color=AMBER, size=13))
+        fig.update_layout(title="% de NFs no prazo por mês de embarque",
+                          yaxis=dict(title="SLA %", range=[0, 105]))
+        st.plotly_chart(fmt(fig, 340), use_container_width=True)
+
+    # Top Ofensores — NFs em atraso de maior valor (ação prioritária)
+    st.markdown('<div class="sec">🔥 Top Ofensores — maior valor parado em atraso</div>',
+                unsafe_allow_html=True)
+    of = df[df["Atrasado"]].copy()
+    if of.empty:
+        st.success("Sem NFs em atraso no recorte atual.")
+    else:
+        cols_of = [c for c in ["NF", "Filial", "Cliente", "Motorista", "Dias Atraso",
+                               "Valor NF", "Status de Entrega", "Ocorrência"]
+                   if c in of.columns]
+        of = of.sort_values("Valor NF", ascending=False).head(20)[cols_of]
+        st.caption("As 20 NFs em atraso de maior valor — priorize estas para destravar caixa.")
+        st.dataframe(of, use_container_width=True, hide_index=True, height=420,
+            column_config={
+                "Dias Atraso": st.column_config.NumberColumn("Atraso", format="%d d"),
+                "Valor NF": st.column_config.NumberColumn("Valor NF", format="R$ %.2f"),
+            })
 
 # ── TAB 1 — Filiais ───────────────────────────────────────────────────────────
 with tab1:
