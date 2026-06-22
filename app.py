@@ -17,5 +17,5 @@ inject_css()
 pg = st.navigation([
     st.Page("paginas/pendencias.py", title="Pendências", icon="📦", default=True),
     st.Page("paginas/entregas.py", title="Entregas", icon="🚚"),
-])
+], position="top")
 pg.run()
