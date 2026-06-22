@@ -72,8 +72,16 @@ URL_RELATORIO = "https://sistema.diaslog.com.br/restrito/Consulta_NotasPendentes
 # ID extraido do link compartilhado da planilha.
 SHEET_ID        = "12_DwR-eL1fM-Aj77ZSFFxtTpLAC9PeN6FE2EoHTn-RA"
 SHEET_ABA       = "Pendencias"  # nome da aba que recebe os dados
-# Chave da conta de servico (JSON). Fica ao lado do script, fora do Git.
-SERVICE_ACCOUNT = Path(__file__).resolve().parent / "service_account.json"
+
+_AQUI = Path(__file__).resolve().parent
+# Autenticacao — duas formas suportadas (todas fora do Git):
+#   1) service_account.json  (se a organizacao permitir chaves de conta de servico)
+#   2) oauth_client.json     (OAuth Desktop: autoriza 1x no navegador, token reutilizado)
+SERVICE_ACCOUNT = _AQUI / "service_account.json"
+OAUTH_CLIENT    = _AQUI / "oauth_client.json"
+OAUTH_TOKEN     = _AQUI / "token_sheets.json"   # gerado apos a 1a autorizacao
+ESCOPO_SHEETS   = ["https://www.googleapis.com/auth/spreadsheets",
+                   "https://www.googleapis.com/auth/drive"]
 
 # Colunas operacionais enviadas ao Sheet (sem dados pessoais LGPD).
 # Tudo que NAO estiver aqui nao sobe — minimiza exposicao de dados.
@@ -391,20 +399,41 @@ def consolidar(arquivos: list[Path]) -> Path:
     return destino
 
 
-def enviar_para_sheets(arquivo_consolidado: Path):
-    """Envia o consolidado (sem dados LGPD) para o Google Sheet.
+def _conectar_sheets():
+    """Autentica no Google Sheets. Prefere service account; senao usa OAuth Desktop.
 
-    Requer:
-      - service_account.json ao lado do script
-      - a planilha compartilhada com o e-mail da service account (Editor)
+    - service_account.json : se a organizacao permitir chaves de conta de servico
+    - oauth_client.json    : OAuth Desktop. Na 1a vez abre o navegador para
+                             autorizar; depois reutiliza/renova token_sheets.json
     """
-    if not SERVICE_ACCOUNT.exists():
-        log("AVISO: service_account.json nao encontrado. Upload ao Sheets ignorado.")
-        log(f"       Coloque a chave em: {SERVICE_ACCOUNT}")
+    import gspread
+
+    if SERVICE_ACCOUNT.exists():
+        from google.oauth2.service_account import Credentials
+        creds = Credentials.from_service_account_file(str(SERVICE_ACCOUNT),
+                                                      scopes=ESCOPO_SHEETS)
+        log("Autenticando via service account...")
+        return gspread.authorize(creds)
+
+    if OAUTH_CLIENT.exists():
+        log("Autenticando via OAuth (navegador na 1a vez)...")
+        return gspread.oauth(
+            credentials_filename=str(OAUTH_CLIENT),
+            authorized_user_filename=str(OAUTH_TOKEN),
+            scopes=ESCOPO_SHEETS,
+        )
+
+    return None
+
+
+def enviar_para_sheets(arquivo_consolidado: Path):
+    """Envia o consolidado (so colunas operacionais, sem dados LGPD) ao Google Sheet."""
+    gc = _conectar_sheets()
+    if gc is None:
+        log("AVISO: sem credencial Google. Upload ao Sheets ignorado.")
+        log(f"       Coloque oauth_client.json (ou service_account.json) em: {_AQUI}")
         return
 
-    import gspread
-    from google.oauth2.service_account import Credentials
     from gspread_dataframe import set_with_dataframe
 
     log("Preparando dados para o Google Sheets...")
@@ -420,11 +449,7 @@ def enviar_para_sheets(arquivo_consolidado: Path):
             df[col] = df[col].dt.strftime("%Y-%m-%d %H:%M:%S")
     df = df.where(pd.notna(df), "")  # NaN -> vazio (Sheets nao aceita NaN)
 
-    # 3) Autentica e abre a planilha
-    escopo = ["https://www.googleapis.com/auth/spreadsheets",
-              "https://www.googleapis.com/auth/drive"]
-    creds = Credentials.from_service_account_file(str(SERVICE_ACCOUNT), scopes=escopo)
-    gc = gspread.authorize(creds)
+    # 3) Abre a planilha
     planilha = gc.open_by_key(SHEET_ID)
 
     # 4) Recria a aba (limpa dados antigos antes de gravar)
