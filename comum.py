@@ -104,7 +104,10 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
 .insight strong { color: var(--text); }
 
 footer { visibility: hidden; }
-[data-testid="stToolbar"] { display: none; }
+
+/* Navegação no topo (st.navigation position=top) bem visível */
+[data-testid="stHeader"] { background: #09222E !important; }
+[data-testid="stNavSectionHeader"], [data-testid="stSidebarNav"] { display: block; }
 </style>
 """
 
