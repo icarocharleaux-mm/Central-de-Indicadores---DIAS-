@@ -31,16 +31,37 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 import pandas as pd
 from playwright.async_api import async_playwright, TimeoutError as PWTimeout
 
-# ── Credenciais (defina nas variaveis de ambiente, NUNCA no codigo) ───────────
-#   PowerShell:  $env:DIASLOG_USUARIO="seu_usuario"; $env:DIASLOG_SENHA="sua_senha"
+# ── Credenciais ───────────────────────────────────────────────────────────────
+# Lidas automaticamente de um arquivo .env ao lado deste script (NUNCA no codigo,
+# NUNCA no Git — o .env esta no .gitignore). Tambem aceita variaveis de ambiente.
+#
+# Crie um arquivo .env com:
+#   DIASLOG_USUARIO=seu_usuario
+#   DIASLOG_SENHA=sua_senha
+def _carregar_env():
+    """Le o arquivo .env (KEY=VALUE por linha) para os.environ, sem dependencias."""
+    env_path = Path(__file__).resolve().parent / ".env"
+    if not env_path.exists():
+        return
+    for linha in env_path.read_text(encoding="utf-8").splitlines():
+        linha = linha.strip()
+        if not linha or linha.startswith("#") or "=" not in linha:
+            continue
+        chave, valor = linha.split("=", 1)
+        chave, valor = chave.strip(), valor.strip().strip('"').strip("'")
+        os.environ.setdefault(chave, valor)  # env do sistema tem prioridade
+
+
+_carregar_env()
+
 USUARIO = os.environ.get("DIASLOG_USUARIO", "")
 SENHA   = os.environ.get("DIASLOG_SENHA",   "")
 
 if not USUARIO or not SENHA:
     raise SystemExit(
-        "Defina as credenciais nas variaveis de ambiente:\n"
-        '  $env:DIASLOG_USUARIO="seu_usuario"\n'
-        '  $env:DIASLOG_SENHA="sua_senha"'
+        "Credenciais nao encontradas. Crie um arquivo .env ao lado do script com:\n"
+        "  DIASLOG_USUARIO=seu_usuario\n"
+        "  DIASLOG_SENHA=sua_senha"
     )
 
 # ── URLs ──────────────────────────────────────────────────────────────────────
