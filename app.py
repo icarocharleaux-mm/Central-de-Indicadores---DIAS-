@@ -4,6 +4,7 @@ Dashboard Streamlit com leitura robusta do relatório de Notas Pendentes.
 """
 
 import io
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -119,6 +120,21 @@ DATE_COLS   = ["Data Pedido", "Data Emissão NF", "Embarque", "Data Prazo",
 NUM_COLS    = ["Peso", "Valor NF", "Volumes"]
 MAPA_RISCO  = {0: "Sem risco GR", 1: "Risco baixo", 2: "Risco médio", 3: "Risco alto"}
 
+# Filiais reais seguem o padrão "UF + cidade" (ex: "SP CAMPINAS", "RJ DUQUE").
+# A coluna Filial vem contaminada com clientes (FISIA, CENTAURO...) e parceiros
+# (PARCEIRO PATINI, R2 EXPRESS) — esses NÃO têm prefixo de UF e são descartados.
+UF_BR = {"AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS",
+         "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC",
+         "SP", "SE", "TO"}
+
+
+def _eh_filial(nome) -> bool:
+    """True se o valor parece uma filial real (começa com sigla de UF + espaço)."""
+    if not isinstance(nome, str):
+        return False
+    partes = nome.strip().split()
+    return len(partes) >= 2 and partes[0].upper() in UF_BR
+
 # ── Fonte de dados padrão: Google Sheet público (alimentado pelo download) ────
 SHEET_ID  = "12_DwR-eL1fM-Aj77ZSFFxtTpLAC9PeN6FE2EoHTn-RA"
 SHEET_ABA = "Pendencias"
@@ -177,6 +193,12 @@ def _processar(df: pd.DataFrame) -> pd.DataFrame:
     # 8) Transportadora (motorista da última viagem)
     if "Motorista última viagem" in df.columns:
         df["Transportadora"] = df["Motorista última viagem"].fillna("Sem transportadora")
+
+    # 9) Separa filial real (UF + cidade) de clientes/parceiros contaminando a coluna
+    if "Filial" in df.columns:
+        df["É Filial"] = df["Filial"].map(_eh_filial)
+    if "Filial de Entrega" in df.columns:
+        df["É FilialEnt"] = df["Filial de Entrega"].map(_eh_filial)
 
     return df
 
@@ -318,9 +340,15 @@ else:
         st.success(f"📂 {upload.name} · {len(df_raw):,} NFs")
 
 # ── Sidebar: filtros ──────────────────────────────────────────────────────────
-def ms(label, col):
-    opts = sorted(df_raw[col].dropna().unique()) if col in df_raw.columns else []
-    return st.multiselect(label, opts, placeholder="Todos", label_visibility="visible") if opts else []
+def ms(label, col, only=None):
+    if col not in df_raw.columns:
+        return []
+    vals = df_raw[col].dropna().unique()
+    if only is not None:
+        vals = [v for v in vals if only(v)]
+    opts = sorted(vals)
+    return st.multiselect(label, opts, placeholder="Todos",
+                          label_visibility="visible") if opts else []
 
 with st.sidebar:
     st.markdown("**📅 Período de Embarque**")
@@ -334,8 +362,8 @@ with st.sidebar:
     else:
         data_ini = data_fim = None
 
-    sel_filiais = ms("🏢 Filial", "Filial")
-    sel_fe      = ms("🚚 Filial de Entrega", "Filial de Entrega")
+    sel_filiais = ms("🏢 Filial", "Filial", only=_eh_filial)
+    sel_fe      = ms("🚚 Filial de Entrega", "Filial de Entrega", only=_eh_filial)
     sel_transp  = ms("🚛 Transportadora", "Transportadora")
     sel_cli     = ms("👤 Cliente", "Cliente")
     sel_status  = ms("📦 Status de Entrega", "Status de Entrega")
@@ -413,8 +441,8 @@ tab0, tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 # ── TAB 0 — Resumo Executivo ──────────────────────────────────────────────────
 with tab0:
     st.markdown('<div class="sec">Semáforo de Filiais</div>', unsafe_allow_html=True)
-    if "Filial" in df.columns:
-        s = df.groupby("Filial").agg(
+    if "É Filial" in df.columns and df["É Filial"].any():
+        s = df[df["É Filial"]].groupby("Filial").agg(
             Total=("NF", "count"), Atraso=("Atrasado", "sum"),
             Valor=("Valor NF", "sum")).reset_index()
         s["% Atraso"] = (s["Atraso"] / s["Total"] * 100).round(1)
@@ -475,10 +503,12 @@ with tab0:
 
 # ── TAB 1 — Filiais ───────────────────────────────────────────────────────────
 with tab1:
-    if "Filial" not in df.columns:
-        st.info("Coluna Filial não disponível.")
+    if "É Filial" not in df.columns or not df["É Filial"].any():
+        st.info("Nenhuma filial (UF + cidade) encontrada no recorte atual.")
     else:
-        d = df.groupby("Filial").agg(
+        st.caption("Apenas filiais operacionais da Dias+ (UF + cidade). "
+                   "Clientes como FISIA e Centauro ficam na aba 👤 Clientes.")
+        d = df[df["É Filial"]].groupby("Filial").agg(
             Total=("NF", "count"), Atraso=("Atrasado", "sum"),
             Valor=("Valor NF", "sum")).reset_index()
         d["% Atraso"] = (d["Atraso"] / d["Total"] * 100).round(1)
@@ -642,11 +672,14 @@ with tab5:
     if "Cliente" not in df.columns:
         st.info("Coluna Cliente não disponível.")
     else:
+        st.caption("Clientes da Dias+ (coluna Cliente) — ex.: FISIA, Centauro, "
+                   "Boticário, Natura. Separado das filiais operacionais.")
         nmax = max(10, df["Cliente"].nunique())
         n = st.slider("Clientes exibidos", 10, min(50, nmax), min(20, nmax), 5)
         c = df.groupby("Cliente").agg(
             Total=("NF", "count"), Atraso=("Atrasado", "sum"),
             Valor=("Valor NF", "sum")).reset_index()
+        c["% Atraso"] = (c["Atraso"] / c["Total"] * 100).round(1)
 
         st.markdown('<div class="sec">Top Clientes — Volume vs. Atraso</div>',
                     unsafe_allow_html=True)
@@ -670,6 +703,17 @@ with tab5:
         st.plotly_chart(barh(cv, "Valor", "Cliente", f"Top {n} — Valor em Aberto",
                              text_col="label", cbar_title="R$",
                              h=max(460, n * 28)),
+                        use_container_width=True)
+
+        st.markdown('<div class="sec">% em Atraso por Cliente (mín. 50 NFs)</div>',
+                    unsafe_allow_html=True)
+        rel = c[c["Total"] >= 50].sort_values("% Atraso", ascending=True).tail(n)
+        rel["label"] = lbl_pct(rel["% Atraso"])
+        st.plotly_chart(barh(rel, "% Atraso", "Cliente",
+                             "Clientes com maior % de atraso (≥50 NFs)",
+                             text_col="label", color_col="% Atraso",
+                             scale=[[0, GREEN], [.4, AMBER], [1, SALMON]],
+                             cbar_title="%", h=max(440, len(rel) * 28)),
                         use_container_width=True)
 
 # ── TAB 6 — Dados ─────────────────────────────────────────────────────────────
