@@ -135,6 +135,30 @@ def _eh_filial(nome) -> bool:
     partes = nome.strip().split()
     return len(partes) >= 2 and partes[0].upper() in UF_BR
 
+
+# Agrupamento regional das filiais. Ajuste livre conforme a operação.
+# Filiais de SP do interior/litoral; o restante de SP cai em "SP" (capital/metro).
+SP_INTERIOR = {
+    "SP CAMPINAS", "SP BAURU", "SP RIBEIRAO PRETO", "SP ARACATUBA",
+    "SP ARARAQUARA", "SP ITAPETININGA", "SP PRESIDENTE PRUDENTE",
+    "SP SAO JOSE DOS CAMPOS", "SP PRAIA GRANDE",
+}
+
+
+def _regional(filial) -> str:
+    """Classifica a filial em uma região: SP, Interior, Sul, RJ (ou Outros)."""
+    if not isinstance(filial, str) or not filial.strip():
+        return "Outros"
+    f = filial.strip().upper()
+    uf = f.split()[0]
+    if uf == "RJ":
+        return "RJ"
+    if uf in {"PR", "SC", "RS"}:
+        return "Sul"
+    if uf == "SP":
+        return "Interior" if f in SP_INTERIOR else "SP"
+    return "Outros"
+
 # ── Fonte de dados padrão: Google Sheet público (alimentado pelo download) ────
 SHEET_ID  = "12_DwR-eL1fM-Aj77ZSFFxtTpLAC9PeN6FE2EoHTn-RA"
 SHEET_ABA = "Pendencias"
@@ -197,6 +221,7 @@ def _processar(df: pd.DataFrame) -> pd.DataFrame:
     # 9) Separa filial real (UF + cidade) de clientes/parceiros contaminando a coluna
     if "Filial" in df.columns:
         df["É Filial"] = df["Filial"].map(_eh_filial)
+        df["Regional"] = df["Filial"].map(_regional)
     if "Filial de Entrega" in df.columns:
         df["É FilialEnt"] = df["Filial de Entrega"].map(_eh_filial)
 
@@ -374,6 +399,7 @@ with st.sidebar:
     else:
         data_ini = data_fim = None
 
+    sel_regional = ms("🗺️ Regional", "Regional", only=lambda r: r != "Outros")
     sel_filiais = ms("🏢 Filial", "Filial", only=_eh_filial)
     sel_fe      = ms("🚚 Filial de Entrega", "Filial de Entrega", only=_eh_filial)
     sel_transp  = ms("🚛 Motorista", "Motorista")
@@ -385,6 +411,9 @@ with st.sidebar:
     st.divider()
     so_atraso = st.toggle("⚠️ Somente em atraso", value=False)
     st.divider()
+    if st.button("🔄 Atualizar dados", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
     st.caption("diaslog.com.br")
 
 # ── Aplicar filtros ───────────────────────────────────────────────────────────
@@ -396,6 +425,7 @@ if data_ini and data_fim and "Embarque" in df.columns:
 def f(df, col, sel):
     return df[df[col].isin(sel)] if sel and col in df.columns else df
 
+df = f(df, "Regional", sel_regional)
 df = f(df, "Filial", sel_filiais)
 df = f(df, "Filial de Entrega", sel_fe)
 df = f(df, "Motorista", sel_transp)
@@ -407,6 +437,7 @@ if so_atraso:
     df = df[df["Atrasado"]]
 
 ativos = []
+if sel_regional: ativos.append(f"Regional: {', '.join(sel_regional)}")
 if sel_filiais: ativos.append(f"Filial: {len(sel_filiais)}")
 if sel_fe:      ativos.append(f"Fil.Entrega: {len(sel_fe)}")
 if sel_transp:  ativos.append(f"Transp.: {len(sel_transp)}")
@@ -452,6 +483,29 @@ tab0, tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 
 # ── TAB 0 — Resumo Executivo ──────────────────────────────────────────────────
 with tab0:
+    # Visão por Regional (SP, Interior, Sul, RJ)
+    if "Regional" in df.columns and (df["Regional"] != "Outros").any():
+        st.markdown('<div class="sec">Visão por Regional</div>', unsafe_allow_html=True)
+        reg = df[df["Regional"] != "Outros"].groupby("Regional").agg(
+            Total=("NF", "count"), Atraso=("Atrasado", "sum"),
+            Valor=("Valor NF", "sum")).reset_index()
+        reg["% Atraso"] = (reg["Atraso"] / reg["Total"] * 100).round(1)
+        rc1, rc2 = st.columns(2)
+        with rc1:
+            reg1 = reg.sort_values("Total")
+            reg1["label"] = lbl_int(reg1["Total"])
+            st.plotly_chart(barh(reg1, "Total", "Regional", "NFs Pendentes por Regional",
+                                 text_col="label", cbar_title="NFs", h=300),
+                            use_container_width=True)
+        with rc2:
+            reg2 = reg.sort_values("% Atraso")
+            reg2["label"] = lbl_pct(reg2["% Atraso"])
+            st.plotly_chart(barh(reg2, "% Atraso", "Regional", "% em Atraso por Regional",
+                                 text_col="label", color_col="% Atraso",
+                                 scale=[[0, GREEN], [.4, AMBER], [1, SALMON]],
+                                 cbar_title="%", h=300),
+                            use_container_width=True)
+
     st.markdown('<div class="sec">Semáforo de Filiais</div>', unsafe_allow_html=True)
     if "É Filial" in df.columns and df["É Filial"].any():
         s = df[df["É Filial"]].groupby("Filial").agg(
