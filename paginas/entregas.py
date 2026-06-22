@@ -123,7 +123,8 @@ with tab0:
             Entregas=("Entregas", "sum"), Sucessos=("Sucessos", "sum"),
             Insucessos=("Insucessos", "sum"), Viagens=("Viagens", "sum")).reset_index()
         g["Resolvidas"] = g["Sucessos"] + g["Insucessos"]
-        g["Sucesso%"] = (g["Sucessos"] / g["Resolvidas"].replace(0, pd.NA) * 100).round(1)
+        g["Sucesso%"] = (g["Sucessos"] / g["Resolvidas"].where(g["Resolvidas"] > 0)
+                         * 100).round(1)
         c1, c2 = st.columns(2)
         with c1:
             g1 = g.sort_values("Entregas").tail(15)
@@ -165,7 +166,8 @@ with tab1:
             Entregas=("Entregas", "sum"), Sucessos=("Sucessos", "sum"),
             Insucessos=("Insucessos", "sum"), Viagens=("Viagens", "sum")).reset_index()
         m["Resolvidas"] = m["Sucessos"] + m["Insucessos"]
-        m["Sucesso%"] = (m["Sucessos"] / m["Resolvidas"].replace(0, pd.NA) * 100).round(1)
+        m["Sucesso%"] = (m["Sucessos"] / m["Resolvidas"].where(m["Resolvidas"] > 0)
+                         * 100).round(1)
 
         st.markdown('<div class="sec">Produtividade — Entregas por Motorista</div>',
                     unsafe_allow_html=True)
