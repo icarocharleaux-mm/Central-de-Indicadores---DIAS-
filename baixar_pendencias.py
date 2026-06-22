@@ -74,14 +74,12 @@ SHEET_ID        = "12_DwR-eL1fM-Aj77ZSFFxtTpLAC9PeN6FE2EoHTn-RA"
 SHEET_ABA       = "Pendencias"  # nome da aba que recebe os dados
 
 _AQUI = Path(__file__).resolve().parent
-# Autenticacao — duas formas suportadas (todas fora do Git):
-#   1) service_account.json  (se a organizacao permitir chaves de conta de servico)
-#   2) oauth_client.json     (OAuth Desktop: autoriza 1x no navegador, token reutilizado)
-SERVICE_ACCOUNT = _AQUI / "service_account.json"
-OAUTH_CLIENT    = _AQUI / "oauth_client.json"
-OAUTH_TOKEN     = _AQUI / "token_sheets.json"   # gerado apos a 1a autorizacao
-ESCOPO_SHEETS   = ["https://www.googleapis.com/auth/spreadsheets",
-                   "https://www.googleapis.com/auth/drive"]
+# Upload via Apps Script Web App (sem Google Cloud / sem service account).
+# URL e token ficam no .env (fora do Git):
+#   SHEETS_WEBAPP_URL=https://script.google.com/macros/s/.../exec
+#   SHEETS_WEBAPP_TOKEN=<segredo>
+WEBAPP_URL   = os.environ.get("SHEETS_WEBAPP_URL", "")
+WEBAPP_TOKEN = os.environ.get("SHEETS_WEBAPP_TOKEN", "")
 
 # Colunas operacionais enviadas ao Sheet (sem dados pessoais LGPD).
 # Tudo que NAO estiver aqui nao sobe — minimiza exposicao de dados.
@@ -399,70 +397,41 @@ def consolidar(arquivos: list[Path]) -> Path:
     return destino
 
 
-def _conectar_sheets():
-    """Autentica no Google Sheets. Prefere service account; senao usa OAuth Desktop.
-
-    - service_account.json : se a organizacao permitir chaves de conta de servico
-    - oauth_client.json    : OAuth Desktop. Na 1a vez abre o navegador para
-                             autorizar; depois reutiliza/renova token_sheets.json
-    """
-    import gspread
-
-    if SERVICE_ACCOUNT.exists():
-        from google.oauth2.service_account import Credentials
-        creds = Credentials.from_service_account_file(str(SERVICE_ACCOUNT),
-                                                      scopes=ESCOPO_SHEETS)
-        log("Autenticando via service account...")
-        return gspread.authorize(creds)
-
-    if OAUTH_CLIENT.exists():
-        log("Autenticando via OAuth (navegador na 1a vez)...")
-        return gspread.oauth(
-            credentials_filename=str(OAUTH_CLIENT),
-            authorized_user_filename=str(OAUTH_TOKEN),
-            scopes=ESCOPO_SHEETS,
-        )
-
-    return None
-
-
 def enviar_para_sheets(arquivo_consolidado: Path):
-    """Envia o consolidado (so colunas operacionais, sem dados LGPD) ao Google Sheet."""
-    gc = _conectar_sheets()
-    if gc is None:
-        log("AVISO: sem credencial Google. Upload ao Sheets ignorado.")
-        log(f"       Coloque oauth_client.json (ou service_account.json) em: {_AQUI}")
-        return
+    """Envia o consolidado (so colunas operacionais, sem dados LGPD) ao Google Sheet
+    via Apps Script Web App (POST de CSV). Sem Google Cloud / service account."""
+    import urllib.request
+    import urllib.parse
 
-    from gspread_dataframe import set_with_dataframe
+    if not WEBAPP_URL or not WEBAPP_TOKEN:
+        log("AVISO: SHEETS_WEBAPP_URL/TOKEN nao definidos no .env. Upload ignorado.")
+        return
 
     log("Preparando dados para o Google Sheets...")
     df = pd.read_excel(arquivo_consolidado, engine="openpyxl")
 
-    # 1) Mantem apenas colunas operacionais (descarta dados pessoais)
+    # 1) Mantem apenas colunas operacionais (descarta dados pessoais LGPD)
     cols = [c for c in COLUNAS_UPLOAD if c in df.columns]
     df = df[cols].copy()
 
-    # 2) Datas viram texto ISO (leitura limpa via CSV no dashboard)
+    # 2) Datas viram texto ISO; NaN vira vazio
     for col in df.columns:
         if pd.api.types.is_datetime64_any_dtype(df[col]):
             df[col] = df[col].dt.strftime("%Y-%m-%d %H:%M:%S")
-    df = df.where(pd.notna(df), "")  # NaN -> vazio (Sheets nao aceita NaN)
+    df = df.where(pd.notna(df), "")
 
-    # 3) Abre a planilha
-    planilha = gc.open_by_key(SHEET_ID)
+    # 3) Serializa em CSV e envia via POST (aba alvo + token vao na query string)
+    csv_bytes = df.to_csv(index=False).encode("utf-8")
+    url = WEBAPP_URL + "?" + urllib.parse.urlencode(
+        {"token": WEBAPP_TOKEN, "aba": SHEET_ABA})
+    req = urllib.request.Request(
+        url, data=csv_bytes, method="POST",
+        headers={"Content-Type": "text/csv; charset=utf-8"})
 
-    # 4) Recria a aba (limpa dados antigos antes de gravar)
-    try:
-        aba = planilha.worksheet(SHEET_ABA)
-        aba.clear()
-    except gspread.WorksheetNotFound:
-        aba = planilha.add_worksheet(title=SHEET_ABA,
-                                     rows=len(df) + 10, cols=len(df.columns) + 2)
-
-    set_with_dataframe(aba, df, include_index=False, resize=True)
-    log(f"Enviado ao Google Sheets: {len(df)} linhas, {len(df.columns)} colunas "
-        f"(aba '{SHEET_ABA}').")
+    log(f"Enviando {len(df)} linhas x {len(cols)} colunas ao Web App...")
+    with urllib.request.urlopen(req, timeout=180) as resp:
+        retorno = resp.read().decode("utf-8", errors="replace").strip()
+    log(f"Resposta do Google Sheets: {retorno}")
 
 
 async def main():
