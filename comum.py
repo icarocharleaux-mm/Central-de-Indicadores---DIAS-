@@ -197,9 +197,16 @@ def barh(df_plot, x, y, title, h=None, text_col=None, color_col=None,
     fig = px.bar(df_plot, x=x, y=y, orientation="h", title=title,
                  text=text_col, **kw)
     fig.update_traces(marker_line_width=0, textposition="outside",
-                      textfont=dict(size=15, family=FONT))
+                      cliponaxis=False, textfont=dict(size=15, family=FONT))
     fig.update_layout(yaxis=dict(categoryorder="total ascending"),
                       xaxis_title="", yaxis_title="")
+    # Estende o eixo de valor para as etiquetas "para fora" nao serem cortadas
+    try:
+        xmax = float(pd.to_numeric(df_plot[x], errors="coerce").max())
+        if xmax > 0:
+            fig.update_xaxes(range=[0, xmax * 1.22])
+    except Exception:
+        pass
     f = fmt(fig, h or max(380, len(df_plot) * 34))
     f.update_layout(coloraxis_showscale=color_fixed is None,
                     coloraxis_colorbar_title=cbar_title)
@@ -211,6 +218,40 @@ def lbl_pct(s):  return s.apply(lambda x: f"{x:.1f}%")
 def lbl_rs(s):
     return s.apply(lambda x: f"R$ {x/1e6:.2f}M" if x >= 1e6
                    else (f"R$ {x/1e3:.0f}k" if x >= 1000 else f"R$ {x:,.0f}"))
+
+
+def tabela_detalhe(df: pd.DataFrame, chave) -> pd.DataFrame:
+    """Agrega por 'chave' (str ou lista) com Total, Na Rua, Atrasadas, Tentativas,
+    Não Viajou, Peso e Valor — base das tabelas de detalhamento (estilo do modelo)."""
+    base = df.copy()
+    s = base["Status de Entrega"].astype(str) if "Status de Entrega" in base.columns \
+        else pd.Series("", index=base.index)
+    base["_narua"] = s.str.contains("Na Rua", case=False, na=False)
+    base["_tent"] = s.str.contains("Tentativa de Entrega", case=False, na=False)
+    base["_naoviajou"] = s.str.contains("Viajou", case=False, na=False)
+    aggs = {"Total": ("NF", "count"), "Na Rua": ("_narua", "sum"),
+            "Atrasadas": ("Atrasado", "sum"), "Tentativas": ("_tent", "sum"),
+            "Não Viajou": ("_naoviajou", "sum")}
+    if "Peso" in base.columns:
+        aggs["Peso (kg)"] = ("Peso", "sum")
+    if "Valor NF" in base.columns:
+        aggs["Valor"] = ("Valor NF", "sum")
+    g = base.groupby(chave).agg(**aggs).reset_index()
+    g["% Atraso"] = (g["Atrasadas"] / g["Total"] * 100).round(1)
+    return g.sort_values("Total", ascending=False)
+
+
+def estilo_detalhe(g: pd.DataFrame):
+    """Styler com formatação e destaque em vermelho para Atrasadas/% Atraso."""
+    fmts = {c: "{:,.0f}" for c in ["Total", "Na Rua", "Atrasadas", "Tentativas",
+                                   "Não Viajou", "Peso (kg)"] if c in g.columns}
+    if "Valor" in g.columns:
+        fmts["Valor"] = "R$ {:,.0f}"
+    if "% Atraso" in g.columns:
+        fmts["% Atraso"] = "{:.1f}%"
+    destaque = [c for c in ["Atrasadas", "% Atraso"] if c in g.columns]
+    return (g.style.format(fmts, na_rep="—")
+            .set_properties(subset=destaque, color="#F08C8C", **{"font-weight": "700"}))
 
 
 # ══════════════════════════════════════════════════════════════════════════════

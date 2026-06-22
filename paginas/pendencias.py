@@ -8,7 +8,8 @@ import streamlit as st
 
 from comum import (TEAL, DEEP, SALMON, AMBER, GREEN, FONT, fmt, barh,
                    lbl_int, lbl_pct, lbl_rs, eh_filial, SHEET_CSV,
-                   carregar_sheets, carregar, header_html)
+                   carregar_sheets, carregar, header_html,
+                   tabela_detalhe, estilo_detalhe)
 
 cabecalho = st.empty()
 
@@ -411,6 +412,13 @@ with tab1:
                                  h=max(440, len(d3) * 26)),
                             use_container_width=True)
 
+        st.markdown('<div class="sec">Detalhamento por Filial</div>',
+                    unsafe_allow_html=True)
+        chave = ["Filial", "Regional"] if "Regional" in df.columns else "Filial"
+        det = tabela_detalhe(df[df["É Filial"]], chave)
+        st.dataframe(estilo_detalhe(det), use_container_width=True,
+                     hide_index=True, height=min(560, 40 + len(det) * 36))
+
 # ── TAB 2 — Motoristas ────────────────────────────────────────────────────────
 with tab2:
     if "Motorista" not in df.columns:
@@ -579,6 +587,12 @@ with tab5:
                              scale=[[0, GREEN], [.4, AMBER], [1, SALMON]],
                              cbar_title="%", h=max(440, len(rel) * 28)),
                         use_container_width=True)
+
+        st.markdown('<div class="sec">Detalhamento por Cliente</div>',
+                    unsafe_allow_html=True)
+        detc = tabela_detalhe(df, "Cliente")
+        st.dataframe(estilo_detalhe(detc), use_container_width=True,
+                     hide_index=True, height=min(620, 40 + len(detc) * 36))
 
 # ── TAB 6 — Dados ─────────────────────────────────────────────────────────────
 with tab6:
