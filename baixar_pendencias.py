@@ -534,35 +534,21 @@ async def baixar_resumo_viagens(page, ctx) -> Path | None:
     except PWTimeout:
         log("Nova aba nao abriu em 3 min; tentando na propria pagina.")
         aba = page
-    await aba.wait_for_load_state("networkidle", timeout=120_000)
-    await aba.wait_for_timeout(2000)
+    try:
+        await aba.wait_for_load_state("domcontentloaded", timeout=60_000)
+    except PWTimeout:
+        pass
 
-    # 7) Exportar para Excel -> download (pode ser icone, igual ao Gerar)
-    exp = await aba.evaluate("""() => {
-        const buscar = (txt) => document.evaluate(
-            "//*[contains(normalize-space(.),'" + txt + "')]",
-            document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
-        let xp = buscar('Exportar para Excel');
-        if (!xp.snapshotLength) xp = buscar('Exportar');
-        if (!xp.snapshotLength) xp = buscar('Excel');
-        if (!xp.snapshotLength) return 'sem-texto';
-        const node = xp.snapshotItem(xp.snapshotLength - 1);
-        const cont = node.closest('td, div, span, p, a') || node.parentElement;
-        let alvo = cont.querySelector("a, img, input[type='image'], button")
-                 || node.previousElementSibling || node;
-        alvo.id = '__exp_btn';
-        return alvo.tagName;
-    }""")
-    log(f"Alvo do 'Exportar para Excel': {exp}")
-
+    # 7) Exportar para o excel -> download. Espera o botao aparecer (sem networkidle).
+    botao = aba.locator(
+        "input[value*='Exportar' i], button:has-text('Exportar'), "
+        "a:has-text('Exportar'), [id*='export' i], "
+        "input[value*='Excel' i], button:has-text('Excel')")
+    log("Aguardando o botao 'Exportar para o excel'...")
+    await botao.first.wait_for(state="visible", timeout=120_000)
+    log("Botao visivel; exportando...")
     async with aba.expect_download(timeout=120_000) as dl_info:
-        if exp != "sem-texto":
-            await aba.locator("#__exp_btn").click()
-        else:
-            await aba.locator(
-                "a:has-text('Excel'), input[value*='Excel' i], "
-                "button:has-text('Excel'), [title*='Excel' i], "
-                "img[title*='Excel' i]").first.click()
+        await botao.first.click()
     download = await dl_info.value
     destino = PASTA_SAIDA / f"resumo_viagens_{HOJE:%Y%m%d}.xlsx"
     await download.save_as(destino)
