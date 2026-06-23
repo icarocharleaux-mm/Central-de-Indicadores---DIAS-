@@ -98,7 +98,9 @@ with st.container(border=True):
     with r2[3]: sel_tipo    = ms("🔖 Tipo de Entrega", "Tipo Entrega")
     r3 = st.columns(4)
     with r3[0]: sel_risco   = ms("🛡️ Risco GR", "Risco GR")
-    with r3[1]: so_atraso   = st.toggle("⚠️ Somente em atraso", value=False)
+    with r3[1]: nf_busca    = st.text_input("🔢 NF (uma ou várias)",
+                                            placeholder="ex: 895323, 240829")
+    with r3[2]: so_atraso   = st.toggle("⚠️ Somente em atraso", value=False)
 
 # ── Aplicar filtros ───────────────────────────────────────────────────────────
 df = df_raw.copy()
@@ -120,6 +122,13 @@ df = f(df, "Risco GR", sel_risco)
 if so_atraso:
     df = df[df["Atrasado"]]
 
+# Busca por NF (uma ou várias, separadas por vírgula/espaço)
+import re as _re
+nfs_busca = [n for n in _re.split(r"[\s,;]+", str(nf_busca)) if n.strip().isdigit()]
+if nfs_busca:
+    alvo = {int(n) for n in nfs_busca}
+    df = df[pd.to_numeric(df["NF"], errors="coerce").isin(alvo)]
+
 ativos = []
 if sel_regional: ativos.append(f"Regional: {', '.join(sel_regional)}")
 if sel_filiais: ativos.append(f"Filial: {len(sel_filiais)}")
@@ -129,6 +138,7 @@ if sel_cli:     ativos.append(f"Cliente: {len(sel_cli)}")
 if sel_status:  ativos.append(f"Status: {len(sel_status)}")
 if sel_tipo:    ativos.append(f"Tipo: {len(sel_tipo)}")
 if sel_risco:   ativos.append(f"Risco: {len(sel_risco)}")
+if nfs_busca:   ativos.append(f"NF: {', '.join(nfs_busca)}")
 if so_atraso:   ativos.append("⚠️ só atraso")
 if ativos:
     st.markdown("<div class='fbadge'>🔍 " + "  |  ".join(ativos) + "</div>",
