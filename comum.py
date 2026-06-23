@@ -259,10 +259,25 @@ MAPA_RISCO  = {0: "Sem risco GR", 1: "Risco baixo", 2: "Risco médio", 3: "Risco
 UF_BR = {"AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS",
          "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC",
          "SP", "SE", "TO"}
-SP_INTERIOR = {
-    "SP CAMPINAS", "SP BAURU", "SP RIBEIRAO PRETO", "SP ARACATUBA",
-    "SP ARARAQUARA", "SP ITAPETININGA", "SP PRESIDENTE PRUDENTE",
-    "SP SAO JOSE DOS CAMPOS",
+
+# Mapa regional oficial — replica a aba "apoio" da planilha do gerente (Amauri).
+# SPC = SP Capital/Metropolitana, SPI = SP Interior.
+REGIONAL_MAP = {
+    "SP SAO MATEUS": "SP Capital", "SP SAO MATEUS II": "SP Capital",
+    "SP CARAPICUIBA": "SP Capital", "SP GUARULHOS": "SP Capital",
+    "SP PRAIA GRANDE": "SP Capital", "SP SAO JOSE DOS CAMPOS": "SP Capital",
+    "SP TABOAO DA SERRA": "SP Capital", "SP OSASCO": "SP Capital",
+    "SP SAO BERNARDO": "SP Capital", "R2 EXPRESS": "SP Capital",
+    "SP ITAPETININGA": "SP Interior", "SP RIBEIRAO PRETO": "SP Interior",
+    "SP BAURU": "SP Interior", "SP PRESIDENTE PRUDENTE": "SP Interior",
+    "SP ARARAQUARA": "SP Interior", "SP ARACATUBA": "SP Interior",
+    "SP CAMPINAS": "SP Interior", "SP SOROCABA": "SP Interior",
+    "PARCEIRO PATINI": "SP Interior",
+    "RJ DUQUE DE CAXIAS": "RJ", "RJ DUQUE - RIO DE JANEIRO": "RJ",
+    "RJ DUQUE - BAIXADA": "RJ", "RJ CAMPO GRANDE": "RJ", "RJ SAO GONCALO": "RJ",
+    "RJ BARRA MANSA": "RJ", "RJ CAMPOS GOYTACAZES": "RJ", "RJ TRES RIOS": "RJ",
+    "RJ NOVA FRIBURGO": "RJ", "RJ SAO PEDRO DA ALDEIA": "RJ", "RJ CUFA": "RJ",
+    "PR PARANAGUA": "PR", "PR CURITIBA": "PR", "PR PONTA GROSSA": "PR",
 }
 
 
@@ -275,17 +290,19 @@ def eh_filial(nome) -> bool:
 
 
 def regional(filial) -> str:
-    """Classifica a filial em SP, Interior, Sul, RJ (ou Outros)."""
+    """Regional pela tabela 'apoio' do gerente; fallback por UF para filiais novas."""
     if not isinstance(filial, str) or not filial.strip():
         return "Outros"
     f = filial.strip().upper()
+    if f in REGIONAL_MAP:
+        return REGIONAL_MAP[f]
     uf = f.split()[0]
     if uf == "RJ":
         return "RJ"
     if uf in {"PR", "SC", "RS"}:
-        return "Sul"
+        return "PR"
     if uf == "SP":
-        return "Interior" if f in SP_INTERIOR else "SP"
+        return "SP Interior"   # padrão para filiais SP novas não mapeadas
     return "Outros"
 
 
