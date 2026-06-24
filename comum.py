@@ -314,7 +314,8 @@ def _processar(df: pd.DataFrame) -> pd.DataFrame:
         df[c] = df[c].astype(str).str.strip().replace({"nan": None, "": None})
     for col in DATE_COLS:
         if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors="coerce", dayfirst=True)
+            # Fonte (Sheet/Excel) usa ISO ano-mês-dia; dayfirst=True invertia dia<=12
+            df[col] = pd.to_datetime(df[col], errors="coerce")
     for col in NUM_COLS:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -393,8 +394,7 @@ def _processar_viagens(df: pd.DataFrame) -> pd.DataFrame:
     for c in df.select_dtypes(include="object").columns:
         df[c] = df[c].astype(str).str.strip().replace({"nan": None, "": None})
     if "Data Entrega" in df.columns:
-        df["Data Entrega"] = pd.to_datetime(df["Data Entrega"], errors="coerce",
-                                            dayfirst=True)
+        df["Data Entrega"] = pd.to_datetime(df["Data Entrega"], errors="coerce")
     for col in VIAGENS_NUM:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")

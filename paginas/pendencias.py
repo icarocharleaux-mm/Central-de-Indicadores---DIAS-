@@ -434,17 +434,60 @@ with tab1:
 with tabm:
     st.caption("Contagem (volumes) por Filial × Data — réplica da tabela dinâmica. "
                "Use o filtro de Status no topo para ver 'Na Rua', 'Em separação' etc.")
-    mc = st.columns([2, 2, 3])
+
+    mbase = df.copy()
+
+    # Regra de pendência: NF com ocorrência no dia do relatório já foi tratada -> nao pendente
+    if "Data ocorrência" in mbase.columns:
+        oc = pd.to_datetime(mbase["Data ocorrência"], errors="coerce")
+        if "Embarque" in mbase.columns and mbase["Embarque"].notna().any():
+            dia_hoje = mbase["Embarque"].dropna().dt.normalize().max()  # dia do relatório
+        else:
+            dia_hoje = oc.dropna().dt.normalize().max()
+        excluir_oc = st.toggle(
+            f"🚦 Excluir NFs já tratadas no dia (ocorrência em "
+            f"{dia_hoje:%d/%m/%Y})", value=True, key="mtx_excoc",
+            help="Pendente = sem ocorrência no dia. Ex.: tentativa de entrega "
+                 "lançada hoje → não está mais pendente hoje.")
+        if excluir_oc and pd.notna(dia_hoje):
+            mbase = mbase[~(oc.dt.normalize() == dia_hoje)]
+
+    mc = st.columns(4)
     with mc[0]:
-        opc_data = [c for c in ["Embarque", "Data Prazo", "Data última viagem"]
-                    if c in df.columns]
-        dim_data = st.selectbox("Data (colunas)", opc_data,
+        opc_data = [c for c in ["Data Prazo", "Embarque", "Data última viagem",
+                                "Data ocorrência"] if c in mbase.columns]
+        dim_data = st.selectbox("Data (cabeçalho/colunas)", opc_data,
                                 index=0, key="mtx_data")
     with mc[1]:
         gran = st.selectbox("Agrupar por", ["Dia", "Semana", "Mês"],
                             index=0, key="mtx_gran")
+    # Filtro por Data Prazo (intervalo)
+    with mc[2]:
+        if "Data Prazo" in mbase.columns and mbase["Data Prazo"].notna().any():
+            dp = mbase["Data Prazo"].dropna()
+            p0, p1 = dp.min().date(), dp.max().date()
+            rp = st.date_input("Filtrar Data Prazo", value=(p0, p1),
+                               min_value=p0, max_value=p1, key="mtx_prazo")
+            if isinstance(rp, tuple) and len(rp) == 2:
+                a, b = pd.Timestamp(rp[0]), pd.Timestamp(rp[1])
+                mbase = mbase[mbase["Data Prazo"].isna() |
+                              ((mbase["Data Prazo"] >= a) & (mbase["Data Prazo"] <= b))]
+    # Filtro por Data de Ocorrência (intervalo, só data)
+    with mc[3]:
+        if "Data ocorrência" in mbase.columns and mbase["Data ocorrência"].notna().any():
+            usar_oc = st.checkbox("Filtrar Data Ocorrência", value=False, key="mtx_focc")
+            ocs = pd.to_datetime(mbase["Data ocorrência"], errors="coerce")
+            if usar_oc:
+                o0 = ocs.dropna().min().date()
+                o1 = ocs.dropna().max().date()
+                ro = st.date_input("Período da ocorrência", value=(o0, o1),
+                                   min_value=o0, max_value=o1, key="mtx_occr",
+                                   label_visibility="collapsed")
+                if isinstance(ro, tuple) and len(ro) == 2:
+                    a, b = pd.Timestamp(ro[0]), pd.Timestamp(ro[1])
+                    mbase = mbase[(ocs.dt.normalize() >= a) & (ocs.dt.normalize() <= b)]
 
-    base = df.dropna(subset=[dim_data]).copy()
+    base = mbase.dropna(subset=[dim_data]).copy()
     if base.empty or "Filial" not in base.columns:
         st.info("Sem dados para a data selecionada no recorte atual.")
     else:
